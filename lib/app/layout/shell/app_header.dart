@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:my_second_app/app/content/app_copy.dart';
 import 'package:my_second_app/app/layout/shell/app_breadcrumb.dart';
 import 'package:my_second_app/app/router/route_names.dart';
 import 'package:my_second_app/app/theme/app_colors.dart';
@@ -22,7 +23,8 @@ class AppHeader extends StatelessWidget {
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
     return Container(
-      padding: EdgeInsets.fromLTRB(compact ? 16 : 28, 16, compact ? 16 : 28, 16),
+      padding:
+          EdgeInsets.fromLTRB(compact ? 16 : 28, 16, compact ? 16 : 28, 16),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: AppColors.line)),
@@ -40,7 +42,7 @@ class AppHeader extends StatelessWidget {
                 IconButton(
                   onPressed: onMenuPressed,
                   icon: const Icon(Icons.menu_rounded),
-                  tooltip: '菜单',
+                  tooltip: AppCopy.menuTooltip,
                 ),
                 const SizedBox(width: 4),
               ],
@@ -96,7 +98,8 @@ class AppHeader extends StatelessWidget {
                       ),
                       const SizedBox(width: 12),
                       ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: compact ? 130 : 200),
+                        constraints:
+                            BoxConstraints(maxWidth: compact ? 130 : 200),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -122,7 +125,7 @@ class AppHeader extends StatelessWidget {
                       ),
                       const SizedBox(width: 8),
                       IconButton(
-                        tooltip: '退出登录',
+                        tooltip: AppCopy.logoutTooltip,
                         onPressed: () async {
                           await appAuthController.logout();
                           if (context.mounted) {

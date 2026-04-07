@@ -16,6 +16,7 @@ class DashboardController extends ChangeNotifier {
   Future<void> load() async {
     state = state.copyWith(loading: true, clearError: true);
     notifyListeners();
+
     try {
       final results = await Future.wait<dynamic>([
         _repository.fetchSummary(),

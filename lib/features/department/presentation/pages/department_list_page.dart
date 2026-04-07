@@ -52,11 +52,15 @@ class _DepartmentListPageState extends State<DepartmentListPage> {
   Future<void> _loadAuxiliaryOptions() async {
     try {
       final departmentOptions = await _departmentRepository.fetchOptions();
-      final employees = await _employeeRepository.fetchEmployees(const EmployeeQuery(page: 1, pageSize: 100));
+      final employees = await _employeeRepository
+          .fetchEmployees(const EmployeeQuery(page: 1, pageSize: 100));
       if (!mounted) return;
       setState(() {
         _departmentOptions = departmentOptions;
-        _leaderOptions = employees.items.map((item) => OptionItem(label: item.name, value: item.id.toString())).toList();
+        _leaderOptions = employees.items
+            .map((item) =>
+                OptionItem(label: item.name, value: item.id.toString()))
+            .toList();
       });
     } catch (_) {}
   }
@@ -90,7 +94,10 @@ class _DepartmentListPageState extends State<DepartmentListPage> {
   }
 
   Future<void> _onSearch() async {
-    _query = _query.copyWith(page: 1, keyword: _keywordController.text.trim(), status: _selectedStatus);
+    _query = _query.copyWith(
+        page: 1,
+        keyword: _keywordController.text.trim(),
+        status: _selectedStatus);
     await _fetchDepartments();
   }
 
@@ -134,7 +141,9 @@ class _DepartmentListPageState extends State<DepartmentListPage> {
         title: const Text('确认删除'),
         content: Text('确定要删除部门“${department.deptName}”吗？'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('取消')),
+          TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('取消')),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
@@ -147,12 +156,14 @@ class _DepartmentListPageState extends State<DepartmentListPage> {
     try {
       await _departmentRepository.deleteDepartment(department.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('部门删除成功')));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('部门删除成功')));
       await _loadAuxiliaryOptions();
       await _fetchDepartments();
     } on ApiException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
+      ScaffoldMessenger.of(context)
+          .showSnackBar(SnackBar(content: Text(error.message)));
     }
   }
 
@@ -161,19 +172,25 @@ class _DepartmentListPageState extends State<DepartmentListPage> {
     Map<String, dynamic>? detail;
     if (isEdit) {
       try {
-        detail = await _departmentRepository.fetchDepartmentDetail(departmentId);
+        detail =
+            await _departmentRepository.fetchDepartmentDetail(departmentId);
       } on ApiException catch (error) {
         if (!mounted) return false;
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(error.message)));
+        ScaffoldMessenger.of(context)
+            .showSnackBar(SnackBar(content: Text(error.message)));
         return false;
       }
     }
 
     final formKey = GlobalKey<FormState>();
-    final codeController = TextEditingController(text: detail?['dept_code'] as String? ?? '');
-    final nameController = TextEditingController(text: detail?['dept_name'] as String? ?? '');
-    final sortOrderController = TextEditingController(text: '${detail?['sort_order'] ?? 0}');
-    final remarkController = TextEditingController(text: detail?['remark'] as String? ?? '');
+    final codeController =
+        TextEditingController(text: detail?['dept_code'] as String? ?? '');
+    final nameController =
+        TextEditingController(text: detail?['dept_name'] as String? ?? '');
+    final sortOrderController =
+        TextEditingController(text: '${detail?['sort_order'] ?? 0}');
+    final remarkController =
+        TextEditingController(text: detail?['remark'] as String? ?? '');
     int? parentId = detail?['parent_id'] as int?;
     int? leaderEmployeeId = detail?['leader_employee_id'] as int?;
     int status = detail?['status'] as int? ?? 1;
@@ -199,7 +216,9 @@ class _DepartmentListPageState extends State<DepartmentListPage> {
                 leaderEmployeeId: leaderEmployeeId,
                 sortOrder: int.tryParse(sortOrderController.text.trim()) ?? 0,
                 status: status,
-                remark: remarkController.text.trim().isEmpty ? null : remarkController.text.trim(),
+                remark: remarkController.text.trim().isEmpty
+                    ? null
+                    : remarkController.text.trim(),
               );
               setModalState(() {
                 saving = true;
@@ -208,7 +227,8 @@ class _DepartmentListPageState extends State<DepartmentListPage> {
               try {
                 if (isEdit) {
                   final data = payload.toJson()..remove('dept_code');
-                  await _departmentRepository.updateDepartment(departmentId, data);
+                  await _departmentRepository.updateDepartment(
+                      departmentId, data);
                 } else {
                   await _departmentRepository.createDepartment(payload);
                 }
@@ -239,9 +259,14 @@ class _DepartmentListPageState extends State<DepartmentListPage> {
                     child: Column(
                       children: [
                         ListTile(
-                          title: Text(isEdit ? '编辑部门' : '新建部门', style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800)),
-                          subtitle: Text(isEdit ? '维护部门层级、负责人和状态。' : '录入部门基础信息并建立组织层级。'),
-                          trailing: IconButton(onPressed: () => Navigator.pop(context, false), icon: const Icon(Icons.close_rounded)),
+                          title: Text(isEdit ? '编辑部门' : '新建部门',
+                              style: const TextStyle(
+                                  fontSize: 24, fontWeight: FontWeight.w800)),
+                          subtitle: Text(
+                              isEdit ? '维护部门层级、负责人和状态。' : '录入部门基础信息并建立组织层级。'),
+                          trailing: IconButton(
+                              onPressed: () => Navigator.pop(context, false),
+                              icon: const Icon(Icons.close_rounded)),
                         ),
                         const Divider(height: 1),
                         Expanded(
@@ -251,16 +276,92 @@ class _DepartmentListPageState extends State<DepartmentListPage> {
                               key: formKey,
                               child: Column(
                                 children: [
-                                  _field(TextFormField(controller: codeController, enabled: !isEdit, decoration: const InputDecoration(labelText: '部门编码'), validator: (value) => value == null || value.trim().isEmpty ? '请输入部门编码' : null)),
-                                  _field(TextFormField(controller: nameController, decoration: const InputDecoration(labelText: '部门名称'), validator: (value) => value == null || value.trim().isEmpty ? '请输入部门名称' : null)),
-                                  _field(DropdownButtonFormField<int?>(initialValue: parentId, decoration: const InputDecoration(labelText: '上级部门'), items: [const DropdownMenuItem<int?>(value: null, child: Text('设为一级部门')), ..._departmentOptions.where((item) => !isEdit || item.value != departmentId.toString()).map((item) => DropdownMenuItem<int?>(value: int.parse(item.value), child: Text(item.label)))], onChanged: (value) => setModalState(() => parentId = value))),
-                                  _field(DropdownButtonFormField<int?>(initialValue: leaderEmployeeId, decoration: const InputDecoration(labelText: '部门负责人'), items: [const DropdownMenuItem<int?>(value: null, child: Text('暂不设置')), ..._leaderOptions.map((item) => DropdownMenuItem<int?>(value: int.parse(item.value), child: Text(item.label)))], onChanged: (value) => setModalState(() => leaderEmployeeId = value))),
-                                  _field(TextFormField(controller: sortOrderController, decoration: const InputDecoration(labelText: '排序值'))),
-                                  _field(DropdownButtonFormField<int>(initialValue: status, decoration: const InputDecoration(labelText: '状态'), items: const [DropdownMenuItem(value: 1, child: Text('启用')), DropdownMenuItem(value: 0, child: Text('停用'))], onChanged: (value) => setModalState(() => status = value ?? 1))),
-                                  TextFormField(controller: remarkController, maxLines: 3, decoration: const InputDecoration(labelText: '备注')),
+                                  _field(TextFormField(
+                                      controller: codeController,
+                                      enabled: !isEdit,
+                                      decoration: const InputDecoration(
+                                          labelText: '部门编码'),
+                                      validator: (value) =>
+                                          value == null || value.trim().isEmpty
+                                              ? '请输入部门编码'
+                                              : null)),
+                                  _field(TextFormField(
+                                      controller: nameController,
+                                      decoration: const InputDecoration(
+                                          labelText: '部门名称'),
+                                      validator: (value) =>
+                                          value == null || value.trim().isEmpty
+                                              ? '请输入部门名称'
+                                              : null)),
+                                  _field(DropdownButtonFormField<int?>(
+                                      initialValue: parentId,
+                                      decoration: const InputDecoration(
+                                          labelText: '上级部门'),
+                                      items: [
+                                        const DropdownMenuItem<int?>(
+                                            value: null, child: Text('设为一级部门')),
+                                        ..._departmentOptions
+                                            .where((item) =>
+                                                !isEdit ||
+                                                item.value !=
+                                                    departmentId.toString())
+                                            .map((item) =>
+                                                DropdownMenuItem<int?>(
+                                                    value:
+                                                        int.parse(item.value),
+                                                    child: Text(item.label)))
+                                      ],
+                                      onChanged: (value) => setModalState(
+                                          () => parentId = value))),
+                                  _field(DropdownButtonFormField<int?>(
+                                      initialValue: leaderEmployeeId,
+                                      decoration: const InputDecoration(
+                                          labelText: '部门负责人'),
+                                      items: [
+                                        const DropdownMenuItem<int?>(
+                                            value: null, child: Text('暂不设置')),
+                                        ..._leaderOptions.map((item) =>
+                                            DropdownMenuItem<int?>(
+                                                value: int.parse(item.value),
+                                                child: Text(item.label)))
+                                      ],
+                                      onChanged: (value) => setModalState(
+                                          () => leaderEmployeeId = value))),
+                                  _field(TextFormField(
+                                      controller: sortOrderController,
+                                      decoration: const InputDecoration(
+                                          labelText: '排序值'))),
+                                  _field(DropdownButtonFormField<int>(
+                                      initialValue: status,
+                                      decoration: const InputDecoration(
+                                          labelText: '状态'),
+                                      items: const [
+                                        DropdownMenuItem(
+                                            value: 1, child: Text('启用')),
+                                        DropdownMenuItem(
+                                            value: 0, child: Text('停用'))
+                                      ],
+                                      onChanged: (value) => setModalState(
+                                          () => status = value ?? 1))),
+                                  TextFormField(
+                                      controller: remarkController,
+                                      maxLines: 3,
+                                      decoration: const InputDecoration(
+                                          labelText: '备注')),
                                   if (formError != null) ...[
                                     const SizedBox(height: 16),
-                                    Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: AppColors.danger.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(14)), child: Text(formError!, style: const TextStyle(color: AppColors.danger, fontWeight: FontWeight.w600))),
+                                    Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                            color: AppColors.danger
+                                                .withValues(alpha: 0.08),
+                                            borderRadius:
+                                                BorderRadius.circular(14)),
+                                        child: Text(formError!,
+                                            style: const TextStyle(
+                                                color: AppColors.danger,
+                                                fontWeight: FontWeight.w600))),
                                   ],
                                 ],
                               ),
@@ -271,9 +372,24 @@ class _DepartmentListPageState extends State<DepartmentListPage> {
                           padding: const EdgeInsets.all(24),
                           child: Row(
                             children: [
-                              Expanded(child: OutlinedButton(onPressed: saving ? null : () => Navigator.pop(context, false), child: const Text('取消'))),
+                              Expanded(
+                                  child: OutlinedButton(
+                                      onPressed: saving
+                                          ? null
+                                          : () => Navigator.pop(context, false),
+                                      child: const Text('取消'))),
                               const SizedBox(width: 12),
-                              Expanded(child: ElevatedButton(onPressed: saving ? null : submit, child: saving ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : Text(isEdit ? '保存修改' : '创建部门'))),
+                              Expanded(
+                                  child: ElevatedButton(
+                                      onPressed: saving ? null : submit,
+                                      child: saving
+                                          ? const SizedBox(
+                                              width: 18,
+                                              height: 18,
+                                              child: CircularProgressIndicator(
+                                                  strokeWidth: 2,
+                                                  color: Colors.white))
+                                          : Text(isEdit ? '保存修改' : '创建部门'))),
                             ],
                           ),
                         ),
@@ -286,7 +402,13 @@ class _DepartmentListPageState extends State<DepartmentListPage> {
           },
         );
       },
-      transitionBuilder: (context, animation, secondaryAnimation, child) => SlideTransition(position: Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)), child: child),
+      transitionBuilder: (context, animation, secondaryAnimation, child) =>
+          SlideTransition(
+              position:
+                  Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero)
+                      .animate(CurvedAnimation(
+                          parent: animation, curve: Curves.easeOutCubic)),
+              child: child),
     );
 
     codeController.dispose();
@@ -304,69 +426,201 @@ class _DepartmentListPageState extends State<DepartmentListPage> {
     final currentPage = _query.page;
     final totalPages = _total == 0 ? 1 : (_total / _query.pageSize).ceil();
 
-    Widget card(Widget child) => Container(width: double.infinity, padding: const EdgeInsets.all(20), decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(24), border: Border.all(color: AppColors.line)), child: child);
+    Widget card(Widget child) => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppColors.line)),
+        child: child);
 
-    Widget tablePanel() => card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      const Text('部门列表', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-      if (_errorMessage != null) ...[
-        const SizedBox(height: 16),
-        Container(width: double.infinity, padding: const EdgeInsets.all(12), decoration: BoxDecoration(color: AppColors.danger.withValues(alpha: 0.08), borderRadius: BorderRadius.circular(14)), child: Text(_errorMessage!, style: const TextStyle(color: AppColors.danger))),
-      ],
-      const SizedBox(height: 16),
-      Expanded(child: _loading ? const Center(child: CircularProgressIndicator()) : _departments.isEmpty ? const _DepartmentEmptyState() : SingleChildScrollView(scrollDirection: Axis.horizontal, child: SingleChildScrollView(child: DataTable(columnSpacing: 24, headingRowColor: WidgetStateProperty.all(const Color(0xFFF8FAFC)), columns: const [
-        DataColumn(label: Text('编码')), DataColumn(label: Text('名称')), DataColumn(label: Text('上级部门')), DataColumn(label: Text('负责人')), DataColumn(label: Text('层级')), DataColumn(label: Text('状态')), DataColumn(label: Text('排序')), DataColumn(label: Text('操作')),
-      ], rows: _departments.map((department) => DataRow(cells: [
-        DataCell(Text(department.deptCode)),
-        DataCell(Text(department.deptName)),
-        DataCell(Text(department.parentName ?? '一级部门')),
-        DataCell(Text(department.leaderName ?? '-')),
-        DataCell(Text('L${department.level}')),
-        DataCell(_DeptStatusTag(status: department.status)),
-        DataCell(Text('${department.sortOrder}')),
-        DataCell(Row(children: [
-          if (canEdit) IconButton(tooltip: '编辑', onPressed: () => _openEdit(department), icon: const Icon(Icons.edit_outlined)),
-          if (canDelete) IconButton(tooltip: '删除', onPressed: () => _deleteDepartment(department), icon: const Icon(Icons.delete_outline)),
-        ])),
-      ])).toList())))),
-      const SizedBox(height: 12),
-      Wrap(spacing: 12, runSpacing: 12, alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, children: [
-        Text('共 $_total 条记录', style: const TextStyle(color: AppColors.textSecondary)),
-        Row(mainAxisSize: MainAxisSize.min, children: [
-          OutlinedButton(onPressed: currentPage > 1 ? () => _changePage(currentPage - 1) : null, child: const Text('上一页')),
-          Padding(padding: const EdgeInsets.symmetric(horizontal: 12), child: Text('$currentPage / $totalPages')),
-          OutlinedButton(onPressed: currentPage < totalPages ? () => _changePage(currentPage + 1) : null, child: const Text('下一页')),
-        ]),
-      ]),
-    ]));
+    Widget tablePanel() =>
+        card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          const Text('部门列表',
+              style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary)),
+          if (_errorMessage != null) ...[
+            const SizedBox(height: 16),
+            Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                    color: AppColors.danger.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(14)),
+                child: Text(_errorMessage!,
+                    style: const TextStyle(color: AppColors.danger))),
+          ],
+          const SizedBox(height: 16),
+          Expanded(
+              child: _loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : _departments.isEmpty
+                      ? const _DepartmentEmptyState()
+                      : SingleChildScrollView(
+                          scrollDirection: Axis.horizontal,
+                          child: SingleChildScrollView(
+                              child: DataTable(
+                                  columnSpacing: 24,
+                                  headingRowColor: WidgetStateProperty.all(
+                                      const Color(0xFFF8FAFC)),
+                                  columns: const [
+                                    DataColumn(label: Text('编码')),
+                                    DataColumn(label: Text('名称')),
+                                    DataColumn(label: Text('上级部门')),
+                                    DataColumn(label: Text('负责人')),
+                                    DataColumn(label: Text('层级')),
+                                    DataColumn(label: Text('状态')),
+                                    DataColumn(label: Text('排序')),
+                                    DataColumn(label: Text('操作')),
+                                  ],
+                                  rows: _departments
+                                      .map((department) => DataRow(cells: [
+                                            DataCell(Text(department.deptCode)),
+                                            DataCell(Text(department.deptName)),
+                                            DataCell(Text(
+                                                department.parentName ??
+                                                    '一级部门')),
+                                            DataCell(Text(
+                                                department.leaderName ?? '-')),
+                                            DataCell(
+                                                Text('L${department.level}')),
+                                            DataCell(_DeptStatusTag(
+                                                status: department.status)),
+                                            DataCell(Text(
+                                                '${department.sortOrder}')),
+                                            DataCell(Row(children: [
+                                              if (canEdit)
+                                                IconButton(
+                                                    tooltip: '编辑',
+                                                    onPressed: () =>
+                                                        _openEdit(department),
+                                                    icon: const Icon(
+                                                        Icons.edit_outlined)),
+                                              if (canDelete)
+                                                IconButton(
+                                                    tooltip: '删除',
+                                                    onPressed: () =>
+                                                        _deleteDepartment(
+                                                            department),
+                                                    icon: const Icon(
+                                                        Icons.delete_outline)),
+                                            ])),
+                                          ]))
+                                      .toList())))),
+          const SizedBox(height: 12),
+          Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                Text('共 $_total 条记录',
+                    style: const TextStyle(color: AppColors.textSecondary)),
+                Row(mainAxisSize: MainAxisSize.min, children: [
+                  OutlinedButton(
+                      onPressed: currentPage > 1
+                          ? () => _changePage(currentPage - 1)
+                          : null,
+                      child: const Text('上一页')),
+                  Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      child: Text('$currentPage / $totalPages')),
+                  OutlinedButton(
+                      onPressed: currentPage < totalPages
+                          ? () => _changePage(currentPage + 1)
+                          : null,
+                      child: const Text('下一页')),
+                ]),
+              ]),
+        ]));
 
     return LayoutBuilder(builder: (context, constraints) {
-      final compact = constraints.maxHeight < 860 || constraints.maxWidth < 1180;
+      final compact =
+          constraints.maxHeight < 860 || constraints.maxWidth < 1180;
       final statCompact = constraints.maxWidth < 1120;
-      final statWidth = constraints.maxWidth < 720 ? constraints.maxWidth : statCompact ? (constraints.maxWidth - 16) / 2 : (constraints.maxWidth - 32) / 3;
+      final statWidth = constraints.maxWidth < 720
+          ? constraints.maxWidth
+          : statCompact
+              ? (constraints.maxWidth - 16) / 2
+              : (constraints.maxWidth - 32) / 3;
       final stats = Wrap(spacing: 16, runSpacing: 16, children: [
-        SizedBox(width: statWidth, child: _DeptStatCard(title: '总部门数', value: '$_total', color: AppColors.brandBlue)),
-        SizedBox(width: statWidth, child: _DeptStatCard(title: '启用', value: '${_departments.where((e) => e.status == 1).length}', color: AppColors.success)),
-        SizedBox(width: statWidth, child: _DeptStatCard(title: '停用', value: '${_departments.where((e) => e.status == 0).length}', color: AppColors.warning)),
+        SizedBox(
+            width: statWidth,
+            child: _DeptStatCard(
+                title: '总部门数', value: '$_total', color: AppColors.brandBlue)),
+        SizedBox(
+            width: statWidth,
+            child: _DeptStatCard(
+                title: '启用',
+                value: '${_departments.where((e) => e.status == 1).length}',
+                color: AppColors.success)),
+        SizedBox(
+            width: statWidth,
+            child: _DeptStatCard(
+                title: '停用',
+                value: '${_departments.where((e) => e.status == 0).length}',
+                color: AppColors.warning)),
       ]);
 
       final content = [
-        Wrap(spacing: 16, runSpacing: 16, alignment: WrapAlignment.spaceBetween, crossAxisAlignment: WrapCrossAlignment.center, children: [
-          ConstrainedBox(constraints: const BoxConstraints(maxWidth: 760), child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            const Text('部门管理', style: TextStyle(fontSize: 30, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
-            const SizedBox(height: 10),
-            Text('维护企业组织层级、负责人和启停状态。当前共 $_total 条部门记录。', style: const TextStyle(color: AppColors.textSecondary, height: 1.7)),
-          ])),
-          if (canAdd) ElevatedButton.icon(onPressed: _openCreate, icon: const Icon(Icons.add_rounded), label: const Text('新建部门')),
-        ]),
+        Wrap(
+            spacing: 16,
+            runSpacing: 16,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 760),
+                  child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text('部门管理',
+                            style: TextStyle(
+                                fontSize: 30,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textPrimary)),
+                        const SizedBox(height: 10),
+                        Text('维护企业组织层级、负责人和启停状态。当前共 $_total 条部门记录。',
+                            style: const TextStyle(
+                                color: AppColors.textSecondary, height: 1.7)),
+                      ])),
+              if (canAdd)
+                ElevatedButton.icon(
+                    onPressed: _openCreate,
+                    icon: const Icon(Icons.add_rounded),
+                    label: const Text('新建部门')),
+            ]),
         const SizedBox(height: 20),
         stats,
         const SizedBox(height: 18),
         card(Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          const Text('条件筛选', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+          const Text('条件筛选',
+              style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textPrimary)),
           const SizedBox(height: 14),
           Wrap(spacing: 12, runSpacing: 12, children: [
-            SizedBox(width: 240, child: TextField(controller: _keywordController, decoration: const InputDecoration(labelText: '部门名称 / 编码'))),
-            SizedBox(width: 160, child: DropdownButtonFormField<int?>(initialValue: _selectedStatus, decoration: const InputDecoration(labelText: '状态'), items: const [DropdownMenuItem<int?>(value: null, child: Text('全部状态')), DropdownMenuItem<int?>(value: 1, child: Text('启用')), DropdownMenuItem<int?>(value: 0, child: Text('停用'))], onChanged: (value) => setState(() => _selectedStatus = value))),
+            SizedBox(
+                width: 240,
+                child: TextField(
+                    controller: _keywordController,
+                    decoration: const InputDecoration(labelText: '部门名称 / 编码'))),
+            SizedBox(
+                width: 160,
+                child: DropdownButtonFormField<int?>(
+                    initialValue: _selectedStatus,
+                    decoration: const InputDecoration(labelText: '状态'),
+                    items: const [
+                      DropdownMenuItem<int?>(value: null, child: Text('全部状态')),
+                      DropdownMenuItem<int?>(value: 1, child: Text('启用')),
+                      DropdownMenuItem<int?>(value: 0, child: Text('停用'))
+                    ],
+                    onChanged: (value) =>
+                        setState(() => _selectedStatus = value))),
             ElevatedButton(onPressed: _onSearch, child: const Text('查询')),
             OutlinedButton(onPressed: _resetFilters, child: const Text('重置')),
           ]),
@@ -377,34 +631,57 @@ class _DepartmentListPageState extends State<DepartmentListPage> {
       if (compact) {
         return SingleChildScrollView(
           padding: const EdgeInsets.only(bottom: 12),
-          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [...content, SizedBox(height: 540, child: tablePanel())]),
+          child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                ...content,
+                SizedBox(height: 540, child: tablePanel())
+              ]),
         );
       }
 
-      return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [...content, Expanded(child: tablePanel())]);
+      return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [...content, Expanded(child: tablePanel())]);
     });
   }
 }
 
-Widget _field(Widget child) => Padding(padding: const EdgeInsets.only(bottom: 14), child: child);
+Widget _field(Widget child) =>
+    Padding(padding: const EdgeInsets.only(bottom: 14), child: child);
 
 class _DeptStatCard extends StatelessWidget {
   final String title;
   final String value;
   final Color color;
-  const _DeptStatCard({required this.title, required this.value, required this.color});
+  const _DeptStatCard(
+      {required this.title, required this.value, required this.color});
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(22), border: Border.all(color: AppColors.line)),
+      decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: AppColors.line)),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        Container(width: 42, height: 42, decoration: BoxDecoration(color: color.withValues(alpha: 0.10), borderRadius: BorderRadius.circular(14)), alignment: Alignment.center, child: Icon(Icons.account_tree_rounded, color: color)),
+        Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.10),
+                borderRadius: BorderRadius.circular(14)),
+            alignment: Alignment.center,
+            child: Icon(Icons.account_tree_rounded, color: color)),
         const SizedBox(height: 16),
         Text(title, style: const TextStyle(color: AppColors.textSecondary)),
         const SizedBox(height: 8),
-        Text(value, style: const TextStyle(fontSize: 26, fontWeight: FontWeight.w800, color: AppColors.textPrimary)),
+        Text(value,
+            style: const TextStyle(
+                fontSize: 26,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textPrimary)),
       ]),
     );
   }
@@ -420,8 +697,12 @@ class _DeptStatusTag extends StatelessWidget {
     final color = enabled ? AppColors.success : AppColors.warning;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(999)),
-      child: Text(enabled ? '启用' : '停用', style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+      decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(999)),
+      child: Text(enabled ? '启用' : '停用',
+          style: TextStyle(
+              color: color, fontWeight: FontWeight.w700, fontSize: 12)),
     );
   }
 }
@@ -435,9 +716,14 @@ class _DepartmentEmptyState extends StatelessWidget {
       child: Column(mainAxisSize: MainAxisSize.min, children: [
         Icon(Icons.account_tree_rounded, size: 42, color: AppColors.textHint),
         SizedBox(height: 14),
-        Text('没有找到符合条件的部门记录', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: AppColors.textPrimary)),
+        Text('没有找到符合条件的部门记录',
+            style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textPrimary)),
         SizedBox(height: 8),
-        Text('你可以调整筛选条件，或者新建一个部门。', style: TextStyle(color: AppColors.textSecondary)),
+        Text('你可以调整筛选条件，或者新建一个部门。',
+            style: TextStyle(color: AppColors.textSecondary)),
       ]),
     );
   }

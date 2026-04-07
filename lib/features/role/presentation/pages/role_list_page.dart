@@ -1,7 +1,24 @@
 import 'package:flutter/material.dart';
 import 'package:my_second_app/app/theme/app_colors.dart';
+import 'package:my_second_app/core/constants/app_breakpoints.dart';
 import 'package:my_second_app/core/constants/permission_codes.dart';
+import 'package:my_second_app/core/permissions/permission_widget.dart';
 import 'package:my_second_app/core/network/api_result.dart';
+import 'package:my_second_app/core/widgets/app_button.dart';
+import 'package:my_second_app/core/widgets/app_card.dart';
+import 'package:my_second_app/core/widgets/app_confirm_dialog.dart';
+import 'package:my_second_app/core/widgets/app_drawer_form.dart';
+import 'package:my_second_app/core/widgets/app_empty.dart';
+import 'package:my_second_app/core/widgets/app_error_state.dart';
+import 'package:my_second_app/core/widgets/app_feedback.dart';
+import 'package:my_second_app/core/widgets/app_loading_skeleton.dart';
+import 'package:my_second_app/core/widgets/app_metric_card.dart';
+import 'package:my_second_app/core/widgets/app_page_header.dart';
+import 'package:my_second_app/core/widgets/app_pagination.dart';
+import 'package:my_second_app/core/widgets/app_search_field.dart';
+import 'package:my_second_app/core/widgets/app_select.dart';
+import 'package:my_second_app/core/widgets/app_status_pill.dart';
+import 'package:my_second_app/core/widgets/app_table.dart';
 import 'package:my_second_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:my_second_app/features/role/data/models/role_form_data.dart';
 import 'package:my_second_app/features/role/data/models/role_query.dart';
@@ -17,7 +34,7 @@ class RoleListPage extends StatefulWidget {
 }
 
 class _RoleListPageState extends State<RoleListPage> {
-  final _keywordController = TextEditingController();
+  final TextEditingController _keywordController = TextEditingController();
   late final RoleRepository _rolesApi;
 
   RoleQuery _query = const RoleQuery();
@@ -76,7 +93,7 @@ class _RoleListPageState extends State<RoleListPage> {
       if (!mounted) return;
       setState(() {
         _loading = false;
-        _error = '角色数据加载失败';
+        _error = '角色数据加载失败，请稍后重试。';
       });
     }
   }
@@ -106,7 +123,7 @@ class _RoleListPageState extends State<RoleListPage> {
     await _load();
   }
 
-  Future<void> _openForm([RoleModel? role]) async {
+  Future<void> _showRoleForm([RoleModel? role]) async {
     final isEdit = role != null;
     Map<String, dynamic>? detail;
     if (isEdit) {
@@ -125,203 +142,147 @@ class _RoleListPageState extends State<RoleListPage> {
     bool saving = false;
     String? formError;
 
-    final ok = await showDialog<bool>(
+    final result = await showGeneralDialog<bool>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setModalState) {
-          final media = MediaQuery.of(context).size;
-          final dialogWidth = media.width < 520 ? media.width * 0.92 : 420.0;
-          final dialogHeight = media.height < 720 ? media.height * 0.88 : 640.0;
+      barrierDismissible: true,
+      barrierLabel: 'role_form',
+      barrierColor: Colors.black.withValues(alpha: 0.28),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (context, _, __) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            Future<void> submit() async {
+              if (!formKey.currentState!.validate()) return;
 
-          Future<void> submit() async {
-            if (!formKey.currentState!.validate()) return;
-            final payload = RoleFormData(
-              roleCode: roleCodeController.text.trim(),
-              roleName: roleNameController.text.trim(),
-              status: status,
-              remark: remarkController.text.trim().isEmpty
-                  ? null
-                  : remarkController.text.trim(),
-            );
-            setModalState(() {
-              saving = true;
-              formError = null;
-            });
-            try {
-              if (isEdit) {
-                final data = payload.toJson()..remove('role_code');
-                await _rolesApi.updateRole(role.id, data);
-              } else {
-                await _rolesApi.createRole(payload);
-              }
-              if (!context.mounted) return;
-              Navigator.pop(context, true);
-            } on ApiException catch (error) {
+              final payload = RoleFormData(
+                roleCode: roleCodeController.text.trim(),
+                roleName: roleNameController.text.trim(),
+                status: status,
+                remark: remarkController.text.trim().isEmpty
+                    ? null
+                    : remarkController.text.trim(),
+              );
+
               setModalState(() {
-                saving = false;
-                formError = error.message;
+                saving = true;
+                formError = null;
               });
-            }
-          }
 
-          return Dialog(
-            insetPadding: EdgeInsets.symmetric(
-              horizontal: media.width < 480 ? 12 : 24,
-              vertical: media.height < 640 ? 12 : 24,
-            ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: dialogWidth,
-                maxHeight: dialogHeight,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
+              try {
+                if (isEdit) {
+                  final data = payload.toJson()..remove('role_code');
+                  await _rolesApi.updateRole(role.id, data);
+                } else {
+                  await _rolesApi.createRole(payload);
+                }
+                if (!context.mounted) return;
+                Navigator.pop(context, true);
+              } on ApiException catch (error) {
+                setModalState(() {
+                  saving = false;
+                  formError = error.message;
+                });
+              } catch (_) {
+                setModalState(() {
+                  saving = false;
+                  formError = isEdit ? '角色更新失败，请稍后重试。' : '角色创建失败，请稍后重试。';
+                });
+              }
+            }
+
+            return AppDrawerForm(
+              title: isEdit ? '编辑角色' : '新建角色',
+              subtitle: isEdit ? '维护角色名称、状态和说明信息。' : '创建新的角色，后续可以继续分配权限。',
+              onClose: () => Navigator.pop(context, false),
+              maxWidth: 500,
+              footerActions: [
+                OutlinedButton(
+                  onPressed:
+                      saving ? null : () => Navigator.pop(context, false),
+                  child: const Text('取消'),
+                ),
+                ElevatedButton(
+                  onPressed: saving ? null : submit,
+                  child: saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(isEdit ? '保存修改' : '创建角色'),
+                ),
+              ],
+              child: Form(
+                key: formKey,
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      isEdit ? '编辑角色' : '新建角色',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
+                    _sectionTitle('角色信息'),
+                    _field(
+                      TextFormField(
+                        controller: roleCodeController,
+                        enabled: !isEdit,
+                        decoration: const InputDecoration(labelText: '角色编码'),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                                ? '请输入角色编码'
+                                : null,
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      isEdit ? '维护角色名称、状态与说明信息。' : '创建一个新的角色，后续可继续分配权限。',
-                      style: const TextStyle(
-                          color: AppColors.textSecondary, height: 1.6),
-                    ),
-                    const SizedBox(height: 20),
-                    Flexible(
-                      child: Form(
-                        key: formKey,
-                        child: SingleChildScrollView(
-                          child: Column(
-                            children: [
-                              _field(
-                                TextFormField(
-                                  controller: roleCodeController,
-                                  enabled: !isEdit,
-                                  decoration:
-                                      const InputDecoration(labelText: '角色编码'),
-                                  validator: (value) {
-                                    if (value == null || value.trim().isEmpty) {
-                                      return '请输入角色编码';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                              ),
-                              _field(
-                                TextFormField(
-                                  controller: roleNameController,
-                                  decoration:
-                                      const InputDecoration(labelText: '角色名称'),
-                                  validator: (value) {
-                                    if (value == null || value.trim().isEmpty) {
-                                      return '请输入角色名称';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                              ),
-                              _field(
-                                DropdownButtonFormField<int>(
-                                  initialValue: status,
-                                  decoration:
-                                      const InputDecoration(labelText: '状态'),
-                                  items: const [
-                                    DropdownMenuItem(
-                                        value: 1, child: Text('启用')),
-                                    DropdownMenuItem(
-                                        value: 0, child: Text('禁用')),
-                                  ],
-                                  onChanged: (value) =>
-                                      setModalState(() => status = value ?? 1),
-                                ),
-                              ),
-                              TextFormField(
-                                controller: remarkController,
-                                maxLines: 3,
-                                decoration:
-                                    const InputDecoration(labelText: '备注'),
-                              ),
-                              if (formError != null) ...[
-                                const SizedBox(height: 14),
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.danger
-                                        .withValues(alpha: 0.08),
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: Text(
-                                    formError!,
-                                    style: const TextStyle(
-                                      color: AppColors.danger,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
+                    _field(
+                      TextFormField(
+                        controller: roleNameController,
+                        decoration: const InputDecoration(labelText: '角色名称'),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                                ? '请输入角色名称'
+                                : null,
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: saving
-                                ? null
-                                : () => Navigator.pop(context, false),
-                            child: const Text('取消'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: saving ? null : submit,
-                            child: saving
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : Text(isEdit ? '保存' : '创建'),
-                          ),
-                        ),
-                      ],
+                    _field(
+                      AppSelectField<int>(
+                        value: status,
+                        labelText: '状态',
+                        items: const [
+                          DropdownMenuItem(value: 1, child: Text('启用')),
+                          DropdownMenuItem(value: 0, child: Text('禁用')),
+                        ],
+                        onChanged: (value) =>
+                            setModalState(() => status = value ?? 1),
+                      ),
                     ),
+                    TextFormField(
+                      controller: remarkController,
+                      maxLines: 3,
+                      decoration: const InputDecoration(labelText: '备注'),
+                    ),
+                    if (formError != null) ...[
+                      const SizedBox(height: 18),
+                      _errorBox(formError!),
+                    ],
                   ],
                 ),
               ),
-            ),
-          );
-        },
-      ),
+            );
+          },
+        );
+      },
     );
 
     roleCodeController.dispose();
     roleNameController.dispose();
     remarkController.dispose();
 
-    if (ok == true) {
+    if (result == true) {
       await _load();
       await appAuthController.refreshCurrentUser();
     }
   }
 
-  Future<void> _assignPermissions(RoleModel role) async {
+  Future<void> _showAssignPermissions(RoleModel role) async {
     final detail = await _rolesApi.fetchRoleDetail(role.id);
     if (!mounted) return;
 
@@ -329,156 +290,100 @@ class _RoleListPageState extends State<RoleListPage> {
         .cast<int>()
         .toSet();
     bool saving = false;
-    String? error;
+    String? formError;
 
-    final ok = await showDialog<bool>(
+    final result = await showGeneralDialog<bool>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setModalState) {
-          final media = MediaQuery.of(context).size;
-          final dialogWidth = media.width < 580 ? media.width * 0.94 : 500.0;
-          final dialogHeight = media.height < 760 ? media.height * 0.90 : 700.0;
-
-          Future<void> submit() async {
-            setModalState(() {
-              saving = true;
-              error = null;
-            });
-            try {
-              await _rolesApi.assignPermissions(
-                  role.id, selected.toList()..sort());
-              if (!context.mounted) return;
-              Navigator.pop(context, true);
-            } on ApiException catch (exception) {
+      barrierDismissible: true,
+      barrierLabel: 'assign_permissions',
+      barrierColor: Colors.black.withValues(alpha: 0.28),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (context, _, __) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            Future<void> submit() async {
               setModalState(() {
-                saving = false;
-                error = exception.message;
+                saving = true;
+                formError = null;
               });
+              try {
+                await _rolesApi.assignPermissions(
+                    role.id, selected.toList()..sort());
+                if (!context.mounted) return;
+                Navigator.pop(context, true);
+              } on ApiException catch (exception) {
+                setModalState(() {
+                  saving = false;
+                  formError = exception.message;
+                });
+              }
             }
-          }
 
-          return Dialog(
-            insetPadding: EdgeInsets.symmetric(
-              horizontal: media.width < 480 ? 12 : 24,
-              vertical: media.height < 640 ? 12 : 24,
-            ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: dialogWidth,
-                maxHeight: dialogHeight,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '分配权限 · ${role.roleName}',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      '勾选角色可访问的菜单、按钮与接口权限。',
-                      style: TextStyle(
-                          color: AppColors.textSecondary, height: 1.6),
-                    ),
-                    const SizedBox(height: 20),
-                    Expanded(
-                      child: _tree.isEmpty
-                          ? const Center(
-                              child: Text(
-                                '当前没有可分配的权限节点',
-                                style:
-                                    TextStyle(color: AppColors.textSecondary),
-                              ),
-                            )
-                          : SingleChildScrollView(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  ..._tree.map(
-                                    (node) => _PermissionNode(
-                                      node: node,
-                                      selected: selected,
-                                      onChanged: () => setModalState(() {}),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                    ),
-                    if (error != null) ...[
-                      const SizedBox(height: 12),
-                      Text(error!,
-                          style: const TextStyle(color: AppColors.danger)),
-                    ],
-                    const SizedBox(height: 20),
-                    Row(
+            return AppDrawerForm(
+              title: '分配权限',
+              subtitle: '为 ${role.roleName} 勾选可访问的菜单、按钮和接口权限。',
+              onClose: () => Navigator.pop(context, false),
+              maxWidth: 560,
+              footerActions: [
+                OutlinedButton(
+                  onPressed:
+                      saving ? null : () => Navigator.pop(context, false),
+                  child: const Text('取消'),
+                ),
+                ElevatedButton(
+                  onPressed: saving ? null : submit,
+                  child: saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('保存权限'),
+                ),
+              ],
+              child: _tree.isEmpty
+                  ? const AppEmptyState(
+                      title: '暂无可分配权限',
+                      message: '当前系统还没有权限节点，请先补充权限配置。',
+                    )
+                  : Column(
                       children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: saving
-                                ? null
-                                : () => Navigator.pop(context, false),
-                            child: const Text('取消'),
+                        ..._tree.map(
+                          (node) => _PermissionNode(
+                            node: node,
+                            selected: selected,
+                            onChanged: () => setModalState(() {}),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: saving ? null : submit,
-                            child: saving
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Text('保存'),
-                          ),
-                        ),
+                        if (formError != null) ...[
+                          const SizedBox(height: 18),
+                          _errorBox(formError!),
+                        ],
                       ],
                     ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+            );
+          },
+        );
+      },
     );
 
-    if (ok == true) {
+    if (result == true) {
       await _load();
       await appAuthController.refreshCurrentUser();
     }
   }
 
-  Future<void> _delete(RoleModel role) async {
-    final ok = await showDialog<bool>(
+  Future<void> _deleteRole(RoleModel role) async {
+    final ok = await showAppConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('确认删除'),
-        content: Text('确定要删除角色“${role.roleName}”吗？'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('取消')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      title: '确认删除',
+      message: '确认要删除角色“${role.roleName}”吗？',
+      confirmText: '删除',
     );
-    if (ok != true) return;
+    if (!ok) return;
 
     try {
       await _rolesApi.deleteRole(role.id);
@@ -487,8 +392,7 @@ class _RoleListPageState extends State<RoleListPage> {
       await appAuthController.refreshCurrentUser();
     } on ApiException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(error.message)));
+      showAppError(context, error.message);
     }
   }
 
@@ -500,322 +404,343 @@ class _RoleListPageState extends State<RoleListPage> {
         appAuthController.hasPermission(PermissionCodes.roleDelete);
     final canAssign =
         appAuthController.hasPermission(PermissionCodes.roleAssignPermission);
-    final pageCount = _total == 0 ? 1 : (_total / _query.pageSize).ceil();
-
-    Widget card(Widget child) => Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.line),
-          ),
-          child: child,
-        );
-
-    Widget tablePanel() => card(
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '共 $_total 个角色',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(_error!, style: const TextStyle(color: AppColors.danger)),
-              ],
-              const SizedBox(height: 12),
-              Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _items.isEmpty
-                        ? const _RoleEmptyState()
-                        : SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: SingleChildScrollView(
-                              child: DataTable(
-                                columnSpacing: 24,
-                                headingRowColor: WidgetStateProperty.all(
-                                    const Color(0xFFF8FAFC)),
-                                columns: const [
-                                  DataColumn(label: Text('编码')),
-                                  DataColumn(label: Text('角色名称')),
-                                  DataColumn(label: Text('状态')),
-                                  DataColumn(label: Text('绑定用户')),
-                                  DataColumn(label: Text('权限数')),
-                                  DataColumn(label: Text('备注')),
-                                  DataColumn(label: Text('操作')),
-                                ],
-                                rows: _items
-                                    .map(
-                                      (role) => DataRow(
-                                        cells: [
-                                          DataCell(Text(role.roleCode)),
-                                          DataCell(Text(role.roleName)),
-                                          DataCell(_StatusPill(
-                                              enabled: role.status == 1)),
-                                          DataCell(Text('${role.userCount}')),
-                                          DataCell(
-                                              Text('${role.permissionCount}')),
-                                          DataCell(
-                                            SizedBox(
-                                              width: 220,
-                                              child: Text(
-                                                role.remark ?? '-',
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                          ),
-                                          DataCell(
-                                            SizedBox(
-                                              width: 124,
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  if (canEdit)
-                                                    _TableActionButton(
-                                                      tooltip: 'Edit',
-                                                      onPressed: () =>
-                                                          _openForm(role),
-                                                      icon: Icons.edit_outlined,
-                                                    ),
-                                                  if (canAssign)
-                                                    _TableActionButton(
-                                                      tooltip:
-                                                          'Assign permissions',
-                                                      onPressed: () =>
-                                                          _assignPermissions(
-                                                              role),
-                                                      icon: Icons
-                                                          .rule_folder_outlined,
-                                                    ),
-                                                  if (canDelete)
-                                                    _TableActionButton(
-                                                      tooltip: 'Delete',
-                                                      onPressed: () =>
-                                                          _delete(role),
-                                                      icon:
-                                                          Icons.delete_outline,
-                                                    ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
-                            ),
-                          ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(
-                    '第 ${_query.page} / $pageCount 页',
-                    style: const TextStyle(color: AppColors.textSecondary),
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      OutlinedButton(
-                        onPressed: _query.page > 1
-                            ? () => _changePage(_query.page - 1)
-                            : null,
-                        child: const Text('上一页'),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton(
-                        onPressed: _query.page < pageCount
-                            ? () => _changePage(_query.page + 1)
-                            : null,
-                        child: const Text('下一页'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact =
-            constraints.maxHeight < 860 || constraints.maxWidth < 1180;
-        final statCompact = constraints.maxWidth < 1120;
-        final statWidth = constraints.maxWidth < 720
-            ? constraints.maxWidth
-            : statCompact
-                ? (constraints.maxWidth - 16) / 2
-                : (constraints.maxWidth - 48) / 4;
+        final compact = constraints.maxWidth < AppBreakpoints.compactDesktop;
+        final cardsPerRow = compact ? 2 : 4;
+        final itemWidth =
+            (constraints.maxWidth - ((cardsPerRow - 1) * 16)) / cardsPerRow;
+        final enabledCount = _items.where((item) => item.status == 1).length;
+        final boundUsers =
+            _items.fold<int>(0, (sum, item) => sum + item.userCount);
+        final totalPermissions = _flattenPermissionCount(_tree);
 
-        final content = [
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
+              AppPageHeader(
+                title: '角色权限',
+                subtitle: '维护角色、绑定用户数量和权限树分配，让系统授权边界保持清晰。',
+                actions: [
+                  if (canAdd)
+                    ElevatedButton.icon(
+                      onPressed: _showRoleForm,
+                      icon: const Icon(Icons.add_moderator_rounded),
+                      label: const Text('新建角色'),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Wrap(
+                spacing: 16,
+                runSpacing: 16,
+                children: [
+                  SizedBox(
+                    width: itemWidth.clamp(220.0, 320.0),
+                    child: AppMetricCard(
+                      icon: Icons.shield_outlined,
+                      color: AppColors.brandBlue,
+                      label: '角色总数',
+                      value: '$_total',
+                      description: '当前筛选结果中的角色总量。',
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth.clamp(220.0, 320.0),
+                    child: AppMetricCard(
+                      icon: Icons.check_circle_outline_rounded,
+                      color: AppColors.success,
+                      label: '启用角色',
+                      value: '$enabledCount',
+                      description: '当前结果中处于启用状态的角色数量。',
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth.clamp(220.0, 320.0),
+                    child: AppMetricCard(
+                      icon: Icons.group_outlined,
+                      color: AppColors.warning,
+                      label: '绑定用户',
+                      value: '$boundUsers',
+                      description: '全部角色已绑定的用户数量汇总。',
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth.clamp(220.0, 320.0),
+                    child: AppMetricCard(
+                      icon: Icons.rule_folder_outlined,
+                      color: AppColors.danger,
+                      label: '权限节点',
+                      value: '$totalPermissions',
+                      description: '当前权限树中可分配的权限节点总数。',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              AppCardSection(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      '角色权限',
+                      '筛选条件',
                       style: TextStyle(
-                        fontSize: 30,
+                        fontSize: 20,
                         fontWeight: FontWeight.w800,
                         color: AppColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      '维护角色、状态与权限树分配。当前共有 $_total 个角色。',
-                      style: const TextStyle(
-                          color: AppColors.textSecondary, height: 1.7),
+                    const SizedBox(height: 6),
+                    const Text(
+                      '支持按角色编码、角色名称和状态快速过滤角色记录。',
+                      style: TextStyle(
+                          color: AppColors.textSecondary, height: 1.5),
+                    ),
+                    const SizedBox(height: 20),
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: [
+                        SizedBox(
+                          width: compact ? constraints.maxWidth : 280,
+                          child: AppSearchField(
+                            controller: _keywordController,
+                            hintText: '搜索角色编码或名称',
+                            onSubmitted: _search,
+                          ),
+                        ),
+                        SizedBox(
+                          width: compact ? constraints.maxWidth : 220,
+                          child: AppSelectField<int>(
+                            value: _status,
+                            labelText: '状态',
+                            items: const [
+                              DropdownMenuItem<int>(
+                                value: null,
+                                child: Text('全部状态'),
+                              ),
+                              DropdownMenuItem(value: 1, child: Text('启用')),
+                              DropdownMenuItem(value: 0, child: Text('禁用')),
+                            ],
+                            onChanged: (value) =>
+                                setState(() => _status = value),
+                          ),
+                        ),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            ElevatedButton(
+                              onPressed: _search,
+                              child: const Text('查询'),
+                            ),
+                            OutlinedButton(
+                              onPressed: _reset,
+                              child: const Text('重置'),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              if (canAdd)
-                ElevatedButton.icon(
-                  onPressed: _openForm,
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('新建角色'),
-                ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            children: [
-              SizedBox(
-                width: statWidth,
-                child: _RoleStatCard(
-                  title: '角色总数',
-                  value: '$_total',
-                  color: AppColors.brandBlue,
-                ),
-              ),
-              SizedBox(
-                width: statWidth,
-                child: _RoleStatCard(
-                  title: '启用',
-                  value: '${_items.where((item) => item.status == 1).length}',
-                  color: AppColors.success,
-                ),
-              ),
-              SizedBox(
-                width: statWidth,
-                child: _RoleStatCard(
-                  title: '禁用',
-                  value: '${_items.where((item) => item.status == 0).length}',
-                  color: AppColors.warning,
-                ),
-              ),
-              SizedBox(
-                width: statWidth,
-                child: _RoleStatCard(
-                  title: '权限节点',
-                  value: '${_tree.length}',
-                  color: AppColors.textPrimary,
+              const SizedBox(height: 24),
+              AppTableSection(
+                title: '角色列表',
+                subtitle:
+                    _loading ? '正在加载角色数据。' : '共 $_total 个角色，支持编辑、分配权限和删除操作。',
+                footer: _loading || _error != null || _items.isEmpty
+                    ? null
+                    : AppPaginationBar(
+                        page: _query.page,
+                        pageSize: _query.pageSize,
+                        total: _total,
+                        onPageChanged: _changePage,
+                      ),
+                child: _buildTable(
+                  canEdit: canEdit,
+                  canDelete: canDelete,
+                  canAssign: canAssign,
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 18),
-          card(
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '条件筛选',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    SizedBox(
-                      width: 240,
-                      child: TextField(
-                        controller: _keywordController,
-                        decoration:
-                            const InputDecoration(labelText: '角色编码 / 角色名称'),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 160,
-                      child: DropdownButtonFormField<int?>(
-                        initialValue: _status,
-                        decoration: const InputDecoration(labelText: '状态'),
-                        items: const [
-                          DropdownMenuItem<int?>(
-                              value: null, child: Text('全部状态')),
-                          DropdownMenuItem<int?>(value: 1, child: Text('启用')),
-                          DropdownMenuItem<int?>(value: 0, child: Text('禁用')),
-                        ],
-                        onChanged: (value) => setState(() => _status = value),
-                      ),
-                    ),
-                    ElevatedButton(onPressed: _search, child: const Text('查询')),
-                    OutlinedButton(onPressed: _reset, child: const Text('重置')),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-        ];
-
-        if (compact) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ...content,
-                SizedBox(height: 560, child: tablePanel()),
-              ],
-            ),
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ...content,
-            Expanded(child: tablePanel()),
-          ],
         );
       },
     );
   }
-}
 
-Widget _field(Widget child) => Padding(
+  Widget _buildTable({
+    required bool canEdit,
+    required bool canDelete,
+    required bool canAssign,
+  }) {
+    if (_loading) {
+      return const AppTableLoadingSkeleton(rows: 6, columns: 7);
+    }
+
+    if (_error != null) {
+      return AppErrorState(
+        message: _error!,
+        onRetry: _load,
+      );
+    }
+
+    if (_items.isEmpty) {
+      return AppEmptyState(
+        title: '暂无数据',
+        message: '当前没有符合条件的角色记录，试试调整筛选条件。',
+        action: OutlinedButton(
+          onPressed: _reset,
+          child: const Text('清空筛选'),
+        ),
+      );
+    }
+    const operationWidth = 132.0;
+
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        headingRowColor: WidgetStateProperty.all(
+          AppColors.bgGray.withValues(alpha: 0.7),
+        ),
+        columns: const [
+          DataColumn(label: Text('编码')),
+          DataColumn(label: Text('角色名称')),
+          DataColumn(label: Text('状态')),
+          DataColumn(label: Text('绑定用户')),
+          DataColumn(label: Text('权限数')),
+          DataColumn(label: Text('备注')),
+          DataColumn(label: Text('操作')),
+        ],
+        rows: _items
+            .map(
+              (role) => DataRow(
+                cells: [
+                  DataCell(Text(role.roleCode)),
+                  DataCell(Text(role.roleName)),
+                  DataCell(
+                    AppStatusPill(
+                      label: role.status == 1 ? '启用' : '禁用',
+                      color: role.status == 1
+                          ? AppColors.success
+                          : AppColors.warning,
+                    ),
+                  ),
+                  DataCell(Text('${role.userCount}')),
+                  DataCell(Text('${role.permissionCount}')),
+                  DataCell(
+                    SizedBox(
+                      width: 220,
+                      child: Text(
+                        role.remark ?? '-',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  DataCell(
+                    SizedBox(
+                      width: operationWidth < 44 ? 44 : operationWidth,
+                      child: Row(
+                        children: [
+                          PermissionWidget(
+                            allowed: canEdit,
+                            showDisabledState: true,
+                            deniedTooltip: '当前账号没有此操作权限',
+                            child: AppIconActionButton(
+                              icon: Icons.edit_outlined,
+                              tooltip: '编辑角色',
+                              onPressed: () => _showRoleForm(role),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          PermissionWidget(
+                            allowed: canAssign,
+                            showDisabledState: true,
+                            deniedTooltip: '当前账号没有此操作权限',
+                            child: AppIconActionButton(
+                              icon: Icons.rule_folder_outlined,
+                              tooltip: '分配权限',
+                              onPressed: () => _showAssignPermissions(role),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          PermissionWidget(
+                            allowed: canDelete,
+                            showDisabledState: true,
+                            deniedTooltip: '当前账号没有此操作权限',
+                            child: AppIconActionButton(
+                              icon: Icons.delete_outline_rounded,
+                              tooltip: '删除角色',
+                              color: AppColors.danger,
+                              onPressed: () => _deleteRole(role),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  int _flattenPermissionCount(List<PermissionModel> nodes) {
+    var total = 0;
+    for (final node in nodes) {
+      total += 1;
+      total += _flattenPermissionCount(node.children);
+    }
+    return total;
+  }
+
+  Widget _sectionTitle(String title) {
+    return Padding(
       padding: const EdgeInsets.only(bottom: 14),
+      child: Text(
+        title,
+        style: const TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textPrimary,
+        ),
+      ),
+    );
+  }
+
+  Widget _field(Widget child) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
       child: child,
     );
+  }
+
+  Widget _errorBox(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.danger.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        message,
+        style: const TextStyle(
+          color: AppColors.danger,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+}
 
 class _PermissionNode extends StatelessWidget {
   final PermissionModel node;
@@ -842,11 +767,12 @@ class _PermissionNode extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(12),
+        color: AppColors.bgGray.withValues(alpha: 0.8),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.line),
       ),
       child: Column(
         children: [
@@ -863,7 +789,7 @@ class _PermissionNode extends StatelessWidget {
           ),
           if (node.children.isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(left: 20),
+              padding: const EdgeInsets.only(left: 18),
               child: Column(
                 children: node.children
                     .map(
@@ -878,137 +804,6 @@ class _PermissionNode extends StatelessWidget {
             ),
         ],
       ),
-    );
-  }
-}
-
-class _RoleStatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final Color color;
-
-  const _RoleStatCard({
-    required this.title,
-    required this.value,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            alignment: Alignment.center,
-            child: Icon(Icons.shield_outlined, color: color),
-          ),
-          const SizedBox(height: 16),
-          Text(title, style: const TextStyle(color: AppColors.textSecondary)),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _StatusPill extends StatelessWidget {
-  final bool enabled;
-
-  const _StatusPill({required this.enabled});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = enabled ? AppColors.success : AppColors.warning;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
-      child: Text(
-        enabled ? '启用' : '禁用',
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
-      ),
-    );
-  }
-}
-
-class _RoleEmptyState extends StatelessWidget {
-  const _RoleEmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.shield_outlined, size: 40, color: AppColors.textHint),
-          SizedBox(height: 14),
-          Text(
-            '没有找到符合条件的角色记录',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            '你可以调整筛选条件，或新建一个角色。',
-            style: TextStyle(color: AppColors.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TableActionButton extends StatelessWidget {
-  final String tooltip;
-  final VoidCallback onPressed;
-  final IconData icon;
-
-  const _TableActionButton({
-    required this.tooltip,
-    required this.onPressed,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      icon: Icon(icon, size: 20),
-      padding: EdgeInsets.zero,
-      visualDensity: VisualDensity.compact,
-      constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-      splashRadius: 18,
     );
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:my_second_app/app/router/route_names.dart';
+import 'package:my_second_app/app/content/app_copy.dart';
+import 'package:my_second_app/app/navigation/app_navigation.dart';
 import 'package:my_second_app/app/theme/app_colors.dart';
 
 class AppBreadcrumb extends StatelessWidget {
@@ -9,15 +10,8 @@ class AppBreadcrumb extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final route = GoRouterState.of(context).matchedLocation;
-    final label = switch (route) {
-      RouteNames.dashboard => '仪表盘',
-      RouteNames.employees => '员工管理',
-      RouteNames.departments => '部门管理',
-      RouteNames.positions => '岗位管理',
-      RouteNames.users => '用户管理',
-      RouteNames.roles => '角色权限',
-      _ => '首页',
-    };
+    final label = AppNavigation.destinationForRoute(route)?.label ??
+        AppCopy.breadcrumbHome;
 
     return Row(
       children: [
@@ -28,7 +22,7 @@ class AppBreadcrumb extends StatelessWidget {
             borderRadius: BorderRadius.circular(999),
           ),
           child: const Text(
-            '控制台',
+            AppCopy.breadcrumbRoot,
             style: TextStyle(
               color: AppColors.brandBlue,
               fontSize: 12,

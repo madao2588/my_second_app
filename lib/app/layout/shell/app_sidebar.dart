@@ -1,75 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import 'package:my_second_app/app/router/route_names.dart';
+import 'package:my_second_app/app/content/app_copy.dart';
+import 'package:my_second_app/app/navigation/app_navigation.dart';
 import 'package:my_second_app/app/theme/app_colors.dart';
-import 'package:my_second_app/core/constants/permission_codes.dart';
 import 'package:my_second_app/features/auth/presentation/providers/auth_provider.dart';
-
-class _SidebarItem {
-  final String label;
-  final IconData icon;
-  final String route;
-  final String? permission;
-
-  const _SidebarItem({
-    required this.label,
-    required this.icon,
-    required this.route,
-    this.permission,
-  });
-}
 
 class AppSidebar extends StatelessWidget {
   const AppSidebar({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final items = <_SidebarItem>[
-      const _SidebarItem(
-        label: '仪表盘',
-        icon: Icons.dashboard_outlined,
-        route: RouteNames.dashboard,
-        permission: PermissionCodes.dashboardView,
-      ),
-      const _SidebarItem(
-        label: '员工管理',
-        icon: Icons.groups_outlined,
-        route: RouteNames.employees,
-        permission: PermissionCodes.empView,
-      ),
-      const _SidebarItem(
-        label: '部门管理',
-        icon: Icons.account_tree_outlined,
-        route: RouteNames.departments,
-        permission: PermissionCodes.deptView,
-      ),
-      const _SidebarItem(
-        label: '岗位管理',
-        icon: Icons.badge_outlined,
-        route: RouteNames.positions,
-        permission: PermissionCodes.positionView,
-      ),
-      const _SidebarItem(
-        label: '用户管理',
-        icon: Icons.person_outline,
-        route: RouteNames.users,
-        permission: PermissionCodes.userView,
-      ),
-      const _SidebarItem(
-        label: '角色权限',
-        icon: Icons.shield_outlined,
-        route: RouteNames.roles,
-        permission: PermissionCodes.roleView,
-      ),
-    ];
-
-    final filtered = items
-        .where(
-          (item) =>
-              item.permission == null ||
-              appAuthController.state.permissions.contains(item.permission),
-        )
-        .toList();
+    final items = AppNavigation.accessibleNavigation(
+      appAuthController.state.permissions,
+    );
 
     return Container(
       decoration: const BoxDecoration(
@@ -103,7 +46,7 @@ class AppSidebar extends StatelessWidget {
                     SizedBox(width: 12),
                     Expanded(
                       child: Text(
-                        'Enterprise Admin',
+                        AppCopy.brandName,
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 18,
@@ -115,7 +58,7 @@ class AppSidebar extends StatelessWidget {
                 ),
                 SizedBox(height: 10),
                 Text(
-                  '企业基础信息管理平台',
+                  AppCopy.brandSubtitle,
                   style: TextStyle(
                     color: Color(0xFFCBD5E1),
                     fontSize: 12,
@@ -128,7 +71,7 @@ class AppSidebar extends StatelessWidget {
           const Padding(
             padding: EdgeInsets.symmetric(horizontal: 8),
             child: Text(
-              '导航菜单',
+              AppCopy.navigationSectionTitle,
               style: TextStyle(
                 color: Color(0xFF64748B),
                 fontSize: 12,
@@ -139,11 +82,12 @@ class AppSidebar extends StatelessWidget {
           const SizedBox(height: 12),
           Expanded(
             child: ListView.separated(
-              itemCount: filtered.length,
+              itemCount: items.length,
               separatorBuilder: (context, index) => const SizedBox(height: 8),
               itemBuilder: (context, index) {
-                final item = filtered[index];
-                final selected = GoRouterState.of(context).matchedLocation == item.route;
+                final item = items[index];
+                final selected =
+                    GoRouterState.of(context).matchedLocation == item.route;
 
                 return AnimatedContainer(
                   duration: const Duration(milliseconds: 180),
@@ -162,7 +106,10 @@ class AppSidebar extends StatelessWidget {
                     borderRadius: BorderRadius.circular(16),
                     onTap: () => context.go(item.route),
                     child: Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 13,
+                      ),
                       child: Row(
                         children: [
                           Container(
@@ -187,7 +134,9 @@ class AppSidebar extends StatelessWidget {
                               item.label,
                               style: TextStyle(
                                 color: Colors.white,
-                                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+                                fontWeight: selected
+                                    ? FontWeight.w700
+                                    : FontWeight.w500,
                               ),
                             ),
                           ),

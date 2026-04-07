@@ -1,15 +1,31 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_second_app/app/theme/app_colors.dart';
+import 'package:my_second_app/core/constants/app_breakpoints.dart';
+import 'package:my_second_app/core/constants/permission_codes.dart';
 import 'package:my_second_app/core/network/api_result.dart';
+import 'package:my_second_app/core/permissions/permission_widget.dart';
+import 'package:my_second_app/core/widgets/app_button.dart';
+import 'package:my_second_app/core/widgets/app_card.dart';
+import 'package:my_second_app/core/widgets/app_confirm_dialog.dart';
+import 'package:my_second_app/core/widgets/app_drawer_form.dart';
+import 'package:my_second_app/core/widgets/app_empty.dart';
+import 'package:my_second_app/core/widgets/app_error_state.dart';
+import 'package:my_second_app/core/widgets/app_feedback.dart';
+import 'package:my_second_app/core/widgets/app_loading_skeleton.dart';
+import 'package:my_second_app/core/widgets/app_metric_card.dart';
+import 'package:my_second_app/core/widgets/app_page_header.dart';
+import 'package:my_second_app/core/widgets/app_pagination.dart';
+import 'package:my_second_app/core/widgets/app_search_field.dart';
+import 'package:my_second_app/core/widgets/app_select.dart';
+import 'package:my_second_app/core/widgets/app_status_pill.dart';
+import 'package:my_second_app/core/widgets/app_table.dart';
 import 'package:my_second_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:my_second_app/features/employee/data/models/employee_form_data.dart';
 import 'package:my_second_app/features/employee/data/models/employee_model.dart';
-import 'package:my_second_app/features/employee/data/models/employee_query.dart';
-import 'package:my_second_app/shared/models/option_item.dart';
-import 'package:my_second_app/shared/repositories/department_repository.dart';
+import 'package:my_second_app/features/employee/presentation/providers/employee_list_provider.dart';
+import 'package:my_second_app/features/employee/presentation/states/employee_list_state.dart';
 import 'package:my_second_app/shared/repositories/employee_repository.dart';
-import 'package:my_second_app/shared/repositories/position_repository.dart';
 
 class EmployeeListPage extends ConsumerStatefulWidget {
   const EmployeeListPage({super.key});
@@ -20,28 +36,16 @@ class EmployeeListPage extends ConsumerStatefulWidget {
 
 class _EmployeeListPageState extends ConsumerState<EmployeeListPage> {
   late final EmployeeRepository _employeeRepository;
-  late final DepartmentRepository _departmentRepository;
-  late final PositionRepository _positionRepository;
-  final TextEditingController _keywordController = TextEditingController();
 
-  EmployeeQuery _query = const EmployeeQuery();
-  List<EmployeeModel> _employees = const [];
-  List<OptionItem> _departmentOptions = const [];
-  List<OptionItem> _positionOptions = const [];
-  bool _loading = true;
-  String? _errorMessage;
-  int _total = 0;
-  int? _selectedDeptId;
-  String? _selectedStatus;
+  final TextEditingController _keywordController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
-    final dio = appAuthController.dio;
-    _employeeRepository = EmployeeRepository(dio);
-    _departmentRepository = DepartmentRepository(dio);
-    _positionRepository = PositionRepository(dio);
-    _bootstrap();
+    _employeeRepository = EmployeeRepository(appAuthController.dio);
+    Future.microtask(
+      () => ref.read(employeeListControllerProvider).bootstrap(),
+    );
   }
 
   @override
@@ -50,142 +54,55 @@ class _EmployeeListPageState extends ConsumerState<EmployeeListPage> {
     super.dispose();
   }
 
-  Future<void> _bootstrap() async {
-    await Future.wait([_loadOptions(), _fetchEmployees()]);
-  }
-
-  Future<void> _loadOptions() async {
-    try {
-      final departments = await _departmentRepository.fetchOptions();
-      final positions = await _positionRepository.fetchOptions();
-      if (!mounted) return;
-      setState(() {
-        _departmentOptions = departments;
-        _positionOptions = positions;
-      });
-    } catch (_) {}
-  }
-
-  Future<void> _fetchEmployees() async {
-    setState(() {
-      _loading = true;
-      _errorMessage = null;
-    });
-    try {
-      final result = await _employeeRepository.fetchEmployees(_query);
-      if (!mounted) return;
-      setState(() {
-        _employees = result.items;
-        _total = result.total;
-        _loading = false;
-      });
-    } on ApiException catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _errorMessage = error.message;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _errorMessage = '员工数据加载失败';
-      });
-    }
-  }
-
-  Future<void> _onSearch() async {
-    _query = _query.copyWith(
-      page: 1,
-      keyword: _keywordController.text.trim(),
-      deptId: _selectedDeptId,
-      status: _selectedStatus,
-    );
-    await _fetchEmployees();
-  }
-
-  Future<void> _resetFilters() async {
-    _keywordController.clear();
-    setState(() {
-      _selectedDeptId = null;
-      _selectedStatus = null;
-      _query = const EmployeeQuery();
-    });
-    await _fetchEmployees();
-  }
-
-  Future<void> _changePage(int page) async {
-    if (page < 1) return;
-    final maxPage = (_total / _query.pageSize).ceil();
-    if (maxPage > 0 && page > maxPage) return;
-    _query = _query.copyWith(page: page);
-    await _fetchEmployees();
-  }
-
   Future<void> _openCreate() async {
     final saved = await _showEmployeeForm();
     if (saved == true) {
-      await _fetchEmployees();
+      await ref.read(employeeListControllerProvider).refresh();
     }
   }
 
   Future<void> _openEdit(EmployeeModel employee) async {
     final saved = await _showEmployeeForm(employeeId: employee.id);
     if (saved == true) {
-      await _fetchEmployees();
+      await ref.read(employeeListControllerProvider).refresh();
     }
   }
 
   Future<void> _deleteEmployee(EmployeeModel employee) async {
-    final confirmed = await showDialog<bool>(
+    final confirmed = await showAppConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('确认删除'),
-        content: Text('确定要删除员工“${employee.name}”吗？'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('取消'),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      title: '确认删除',
+      message: '确认要删除“${employee.name}”吗？',
+      confirmText: '删除',
     );
-    if (confirmed != true) return;
+    if (!confirmed) return;
 
     try {
       await _employeeRepository.deleteEmployee(employee.id);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('员工删除成功')),
-      );
-      await _fetchEmployees();
+      showAppSuccess(context, '员工删除成功');
+      await ref.read(employeeListControllerProvider).refresh();
     } on ApiException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(error.message)),
-      );
+      showAppError(context, error.message);
     }
   }
 
   Future<bool?> _showEmployeeForm({int? employeeId}) async {
     final isEdit = employeeId != null;
+    final listState = ref.read(employeeListControllerProvider).state;
     Map<String, dynamic>? detail;
+
     if (isEdit) {
       try {
         detail = await _employeeRepository.fetchEmployeeDetail(employeeId);
       } on ApiException catch (error) {
         if (!mounted) return false;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(error.message)),
-        );
+        showAppError(context, error.message);
         return false;
       }
     }
+
     if (!mounted) return false;
 
     final formKey = GlobalKey<FormState>();
@@ -198,7 +115,7 @@ class _EmployeeListPageState extends ConsumerState<EmployeeListPage> {
     final emailController =
         TextEditingController(text: detail?['email'] as String? ?? '');
     final hireDateController = TextEditingController(
-      text: (detail?['hire_date'] as String?) ??
+      text: detail?['hire_date'] as String? ??
           DateTime.now().toIso8601String().split('T').first,
     );
     final birthDateController =
@@ -209,6 +126,7 @@ class _EmployeeListPageState extends ConsumerState<EmployeeListPage> {
         TextEditingController(text: detail?['address'] as String? ?? '');
     final remarkController =
         TextEditingController(text: detail?['remark'] as String? ?? '');
+
     String gender = detail?['gender'] as String? ?? 'male';
     String status = detail?['status'] as String? ?? 'active';
     int? deptId = detail?['dept_id'] as int?;
@@ -216,10 +134,6 @@ class _EmployeeListPageState extends ConsumerState<EmployeeListPage> {
     int? leaderId = detail?['leader_id'] as int?;
     bool saving = false;
     String? formError;
-    final leaderOptions = _employees
-        .map((employee) =>
-            OptionItem(label: employee.name, value: employee.id.toString()))
-        .toList();
 
     final result = await showGeneralDialog<bool>(
       context: context,
@@ -227,13 +141,13 @@ class _EmployeeListPageState extends ConsumerState<EmployeeListPage> {
       barrierLabel: 'employee_form',
       barrierColor: Colors.black.withValues(alpha: 0.28),
       transitionDuration: const Duration(milliseconds: 220),
-      pageBuilder: (context, animation, secondaryAnimation) {
+      pageBuilder: (context, _, __) {
         return StatefulBuilder(
           builder: (context, setModalState) {
             Future<void> submit() async {
               if (!formKey.currentState!.validate()) return;
               if (deptId == null || positionId == null) {
-                setModalState(() => formError = '请选择部门和岗位');
+                setModalState(() => formError = '请选择部门和岗位。');
                 return;
               }
 
@@ -273,11 +187,12 @@ class _EmployeeListPageState extends ConsumerState<EmployeeListPage> {
 
               try {
                 if (isEdit) {
-                  final payload = formData.toJson()..remove('emp_no');
-                  await _employeeRepository.updateEmployee(employeeId, payload);
+                  final data = formData.toJson()..remove('emp_no');
+                  await _employeeRepository.updateEmployee(employeeId, data);
                 } else {
                   await _employeeRepository.createEmployee(formData);
                 }
+
                 if (!context.mounted) return;
                 Navigator.pop(context, true);
               } on ApiException catch (error) {
@@ -285,281 +200,219 @@ class _EmployeeListPageState extends ConsumerState<EmployeeListPage> {
                   saving = false;
                   formError = error.message;
                 });
+              } catch (_) {
+                setModalState(() {
+                  saving = false;
+                  formError = isEdit ? '员工更新失败，请稍后重试。' : '员工创建失败，请稍后重试。';
+                });
               }
             }
 
-            return Align(
-              alignment: Alignment.centerRight,
-              child: Material(
-                color: Colors.white,
-                child: SizedBox(
-                  width: MediaQuery.of(context).size.width < 560
-                      ? MediaQuery.of(context).size.width * 0.92
-                      : 500,
-                  child: SafeArea(
-                    child: Column(
-                      children: [
-                        ListTile(
-                          title: Text(
-                            isEdit ? '编辑员工' : '新建员工',
-                            style: const TextStyle(
-                                fontSize: 24, fontWeight: FontWeight.w800),
+            return AppDrawerForm(
+              title: isEdit ? '编辑员工' : '新建员工',
+              subtitle:
+                  isEdit ? '维护员工的基础信息、组织关系和账号状态。' : '录入员工信息并建立部门、岗位和直属上级关系。',
+              onClose: () => Navigator.pop(context, false),
+              maxWidth: 560,
+              footerActions: [
+                OutlinedButton(
+                  onPressed:
+                      saving ? null : () => Navigator.pop(context, false),
+                  child: const Text('取消'),
+                ),
+                ElevatedButton(
+                  onPressed: saving ? null : submit,
+                  child: saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
                           ),
-                          subtitle: Text(
-                            isEdit ? '更新员工资料与组织关系。' : '录入员工基础信息与组织信息。',
-                          ),
-                          trailing: IconButton(
-                            onPressed: () => Navigator.pop(context, false),
-                            icon: const Icon(Icons.close_rounded),
-                          ),
-                        ),
-                        const Divider(height: 1),
-                        Expanded(
-                          child: SingleChildScrollView(
-                            padding: const EdgeInsets.all(24),
-                            child: Form(
-                              key: formKey,
-                              child: Column(
-                                children: [
-                                  _field(
-                                    TextFormField(
-                                      controller: empNoController,
-                                      enabled: !isEdit,
-                                      decoration: const InputDecoration(
-                                          labelText: '工号'),
-                                      validator: (value) =>
-                                          value == null || value.trim().isEmpty
-                                              ? '请输入工号'
-                                              : null,
-                                    ),
-                                  ),
-                                  _field(
-                                    TextFormField(
-                                      controller: nameController,
-                                      decoration: const InputDecoration(
-                                          labelText: '姓名'),
-                                      validator: (value) =>
-                                          value == null || value.trim().isEmpty
-                                              ? '请输入姓名'
-                                              : null,
-                                    ),
-                                  ),
-                                  _field(
-                                    DropdownButtonFormField<String>(
-                                      initialValue: gender,
-                                      decoration: const InputDecoration(
-                                          labelText: '性别'),
-                                      items: const [
-                                        DropdownMenuItem(
-                                            value: 'male', child: Text('男')),
-                                        DropdownMenuItem(
-                                            value: 'female', child: Text('女')),
-                                      ],
-                                      onChanged: (value) => setModalState(
-                                          () => gender = value ?? 'male'),
-                                    ),
-                                  ),
-                                  _field(
-                                    TextFormField(
-                                      controller: phoneController,
-                                      decoration: const InputDecoration(
-                                          labelText: '手机号'),
-                                    ),
-                                  ),
-                                  _field(
-                                    TextFormField(
-                                      controller: emailController,
-                                      decoration: const InputDecoration(
-                                          labelText: '邮箱'),
-                                    ),
-                                  ),
-                                  _field(
-                                    DropdownButtonFormField<int>(
-                                      initialValue: deptId,
-                                      decoration: const InputDecoration(
-                                          labelText: '部门'),
-                                      items: _departmentOptions
-                                          .map(
-                                            (item) => DropdownMenuItem<int>(
-                                              value: int.parse(item.value),
-                                              child: Text(item.label),
-                                            ),
-                                          )
-                                          .toList(),
-                                      onChanged: (value) =>
-                                          setModalState(() => deptId = value),
-                                    ),
-                                  ),
-                                  _field(
-                                    DropdownButtonFormField<int>(
-                                      initialValue: positionId,
-                                      decoration: const InputDecoration(
-                                          labelText: '岗位'),
-                                      items: _positionOptions
-                                          .map(
-                                            (item) => DropdownMenuItem<int>(
-                                              value: int.parse(item.value),
-                                              child: Text(item.label),
-                                            ),
-                                          )
-                                          .toList(),
-                                      onChanged: (value) => setModalState(
-                                          () => positionId = value),
-                                    ),
-                                  ),
-                                  _field(
-                                    DropdownButtonFormField<int?>(
-                                      initialValue: leaderId,
-                                      decoration: const InputDecoration(
-                                          labelText: '直属上级'),
-                                      items: [
-                                        const DropdownMenuItem<int?>(
-                                            value: null, child: Text('无')),
-                                        ...leaderOptions.map(
-                                          (item) => DropdownMenuItem<int?>(
-                                            value: int.parse(item.value),
-                                            child: Text(item.label),
-                                          ),
-                                        ),
-                                      ],
-                                      onChanged: (value) =>
-                                          setModalState(() => leaderId = value),
-                                    ),
-                                  ),
-                                  _field(
-                                    DropdownButtonFormField<String>(
-                                      initialValue: status,
-                                      decoration: const InputDecoration(
-                                          labelText: '状态'),
-                                      items: const [
-                                        DropdownMenuItem(
-                                            value: 'active', child: Text('在职')),
-                                        DropdownMenuItem(
-                                            value: 'inactive',
-                                            child: Text('停用')),
-                                        DropdownMenuItem(
-                                            value: 'left', child: Text('离职')),
-                                      ],
-                                      onChanged: (value) => setModalState(
-                                          () => status = value ?? 'active'),
-                                    ),
-                                  ),
-                                  _field(
-                                    TextFormField(
-                                      controller: hireDateController,
-                                      decoration: const InputDecoration(
-                                        labelText: '入职日期',
-                                        hintText: 'YYYY-MM-DD',
-                                      ),
-                                      validator: (value) =>
-                                          value == null || value.trim().isEmpty
-                                              ? '请输入入职日期'
-                                              : null,
-                                    ),
-                                  ),
-                                  _field(
-                                    TextFormField(
-                                      controller: leftAtController,
-                                      decoration: const InputDecoration(
-                                        labelText: '离职日期',
-                                        hintText: 'YYYY-MM-DD',
-                                      ),
-                                    ),
-                                  ),
-                                  _field(
-                                    TextFormField(
-                                      controller: birthDateController,
-                                      decoration: const InputDecoration(
-                                        labelText: '出生日期',
-                                        hintText: 'YYYY-MM-DD',
-                                      ),
-                                    ),
-                                  ),
-                                  _field(
-                                    TextFormField(
-                                      controller: addressController,
-                                      decoration: const InputDecoration(
-                                          labelText: '地址'),
-                                    ),
-                                  ),
-                                  TextFormField(
-                                    controller: remarkController,
-                                    maxLines: 3,
-                                    decoration:
-                                        const InputDecoration(labelText: '备注'),
-                                  ),
-                                  if (formError != null) ...[
-                                    const SizedBox(height: 16),
-                                    Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.all(12),
-                                      decoration: BoxDecoration(
-                                        color: AppColors.danger
-                                            .withValues(alpha: 0.08),
-                                        borderRadius: BorderRadius.circular(14),
-                                      ),
-                                      child: Text(
-                                        formError!,
-                                        style: const TextStyle(
-                                          color: AppColors.danger,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
-                                ],
+                        )
+                      : Text(isEdit ? '保存修改' : '创建员工'),
+                ),
+              ],
+              child: Form(
+                key: formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _buildSectionTitle('基本信息'),
+                    _buildField(
+                      TextFormField(
+                        controller: empNoController,
+                        enabled: !isEdit,
+                        decoration: const InputDecoration(labelText: '工号'),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                                ? '请输入工号'
+                                : null,
+                      ),
+                    ),
+                    _buildField(
+                      TextFormField(
+                        controller: nameController,
+                        decoration: const InputDecoration(labelText: '姓名'),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                                ? '请输入姓名'
+                                : null,
+                      ),
+                    ),
+                    _buildField(
+                      AppSelectField<String>(
+                        value: gender,
+                        labelText: '性别',
+                        items: const [
+                          DropdownMenuItem(value: 'male', child: Text('男')),
+                          DropdownMenuItem(value: 'female', child: Text('女')),
+                        ],
+                        onChanged: (value) =>
+                            setModalState(() => gender = value ?? 'male'),
+                      ),
+                    ),
+                    _buildField(
+                      TextFormField(
+                        controller: phoneController,
+                        decoration: const InputDecoration(labelText: '手机号'),
+                      ),
+                    ),
+                    _buildField(
+                      TextFormField(
+                        controller: emailController,
+                        decoration: const InputDecoration(labelText: '邮箱'),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildSectionTitle('组织关系'),
+                    _buildField(
+                      AppSelectField<int>(
+                        value: deptId,
+                        labelText: '部门',
+                        items: listState.departmentOptions
+                            .map(
+                              (item) => DropdownMenuItem(
+                                value: int.parse(item.value),
+                                child: Text(item.label),
                               ),
+                            )
+                            .toList(),
+                        onChanged: (value) =>
+                            setModalState(() => deptId = value),
+                      ),
+                    ),
+                    _buildField(
+                      AppSelectField<int>(
+                        value: positionId,
+                        labelText: '岗位',
+                        items: listState.positionOptions
+                            .map(
+                              (item) => DropdownMenuItem(
+                                value: int.parse(item.value),
+                                child: Text(item.label),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) =>
+                            setModalState(() => positionId = value),
+                      ),
+                    ),
+                    _buildField(
+                      AppSelectField<int>(
+                        value: leaderId,
+                        labelText: '直属上级',
+                        items: [
+                          const DropdownMenuItem<int>(
+                            value: null,
+                            child: Text('不设置'),
+                          ),
+                          ...listState.leaderOptions.map(
+                            (item) => DropdownMenuItem(
+                              value: int.parse(item.value),
+                              child: Text(item.label),
                             ),
                           ),
+                        ],
+                        onChanged: (value) =>
+                            setModalState(() => leaderId = value),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    _buildSectionTitle('状态与补充信息'),
+                    _buildField(
+                      AppSelectField<String>(
+                        value: status,
+                        labelText: '状态',
+                        items: const [
+                          DropdownMenuItem(value: 'active', child: Text('在职')),
+                          DropdownMenuItem(
+                              value: 'inactive', child: Text('停用')),
+                          DropdownMenuItem(value: 'left', child: Text('离职')),
+                        ],
+                        onChanged: (value) =>
+                            setModalState(() => status = value ?? 'active'),
+                      ),
+                    ),
+                    _buildField(
+                      TextFormField(
+                        controller: hireDateController,
+                        decoration: const InputDecoration(labelText: '入职日期'),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                                ? '请输入入职日期'
+                                : null,
+                      ),
+                    ),
+                    _buildField(
+                      TextFormField(
+                        controller: birthDateController,
+                        decoration: const InputDecoration(labelText: '出生日期'),
+                      ),
+                    ),
+                    _buildField(
+                      TextFormField(
+                        controller: leftAtController,
+                        decoration: const InputDecoration(labelText: '离职日期'),
+                      ),
+                    ),
+                    _buildField(
+                      TextFormField(
+                        controller: addressController,
+                        decoration: const InputDecoration(labelText: '联系地址'),
+                      ),
+                    ),
+                    TextFormField(
+                      controller: remarkController,
+                      maxLines: 3,
+                      decoration: const InputDecoration(labelText: '备注'),
+                    ),
+                    if (formError != null) ...[
+                      const SizedBox(height: 18),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.danger.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: Row(
-                            children: [
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: saving
-                                      ? null
-                                      : () => Navigator.pop(context, false),
-                                  child: const Text('取消'),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: ElevatedButton(
-                                  onPressed: saving ? null : submit,
-                                  child: saving
-                                      ? const SizedBox(
-                                          width: 18,
-                                          height: 18,
-                                          child: CircularProgressIndicator(
-                                            strokeWidth: 2,
-                                            color: Colors.white,
-                                          ),
-                                        )
-                                      : Text(isEdit ? '保存修改' : '创建员工'),
-                                ),
-                              ),
-                            ],
+                        child: Text(
+                          formError!,
+                          style: const TextStyle(
+                            color: AppColors.danger,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ],
-                    ),
-                  ),
+                      ),
+                    ],
+                  ],
                 ),
               ),
             );
           },
         );
       },
-      transitionBuilder: (context, animation, secondaryAnimation, child) =>
-          SlideTransition(
-        position:
-            Tween<Offset>(begin: const Offset(1, 0), end: Offset.zero).animate(
-          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
-        ),
-        child: child,
-      ),
     );
 
     empNoController.dispose();
@@ -571,505 +424,350 @@ class _EmployeeListPageState extends ConsumerState<EmployeeListPage> {
     leftAtController.dispose();
     addressController.dispose();
     remarkController.dispose();
+
     return result;
   }
 
   @override
   Widget build(BuildContext context) {
-    final canAdd = appAuthController.hasPermission('emp:add');
-    final canEdit = appAuthController.hasPermission('emp:edit');
-    final canDelete = appAuthController.hasPermission('emp:delete');
-    final currentPage = _query.page;
-    final totalPages = _total == 0 ? 1 : (_total / _query.pageSize).ceil();
+    final canAdd = appAuthController.hasPermission(PermissionCodes.empAdd);
+    final listController = ref.watch(employeeListControllerProvider);
+    final listState = listController.state;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < AppBreakpoints.compactDesktop;
+        final cardsPerRow = compact ? 2 : 4;
+        final itemWidth =
+            (constraints.maxWidth - ((cardsPerRow - 1) * 16)) / cardsPerRow;
+        final activeCount = listState.employees
+            .where((employee) => employee.status == 'active')
+            .length;
+        final departmentCount = listState.employees
+            .map((employee) => employee.deptName)
+            .toSet()
+            .length;
+        final positionCount = listState.employees
+            .map((employee) => employee.positionName)
+            .toSet()
+            .length;
 
-    Widget card(Widget child) => Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.line),
-          ),
-          child: child,
-        );
-
-    Widget tablePanel() => card(
-          Column(
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text(
-                '员工列表',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              if (_errorMessage != null) ...[
-                const SizedBox(height: 16),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppColors.danger.withValues(alpha: 0.08),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  child: Text(
-                    _errorMessage!,
-                    style: const TextStyle(color: AppColors.danger),
-                  ),
-                ),
-              ],
-              const SizedBox(height: 16),
-              Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _employees.isEmpty
-                        ? const _EmployeeEmptyState()
-                        : SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: SingleChildScrollView(
-                              child: DataTable(
-                                columnSpacing: 28,
-                                headingRowColor: WidgetStateProperty.all(
-                                    const Color(0xFFF8FAFC)),
-                                columns: const [
-                                  DataColumn(label: Text('工号')),
-                                  DataColumn(label: Text('姓名')),
-                                  DataColumn(label: Text('部门')),
-                                  DataColumn(label: Text('岗位')),
-                                  DataColumn(label: Text('状态')),
-                                  DataColumn(label: Text('入职日期')),
-                                  DataColumn(label: Text('直属上级')),
-                                  DataColumn(label: Text('操作')),
-                                ],
-                                rows: _employees
-                                    .map(
-                                      (employee) => DataRow(
-                                        cells: [
-                                          DataCell(Text(employee.empNo)),
-                                          DataCell(Text(employee.name)),
-                                          DataCell(Text(employee.deptName)),
-                                          DataCell(Text(employee.positionName)),
-                                          DataCell(_StatusTag(
-                                              status: employee.status)),
-                                          DataCell(Text(employee.hireDate
-                                              .split('T')
-                                              .first)),
-                                          DataCell(
-                                              Text(employee.leaderName ?? '-')),
-                                          DataCell(
-                                            SizedBox(
-                                              width: 88,
-                                              child: Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  if (canEdit)
-                                                    _TableActionButton(
-                                                      tooltip: 'Edit',
-                                                      onPressed: () =>
-                                                          _openEdit(employee),
-                                                      icon: Icons.edit_outlined,
-                                                    ),
-                                                  if (canDelete)
-                                                    _TableActionButton(
-                                                      tooltip: 'Delete',
-                                                      onPressed: () =>
-                                                          _deleteEmployee(
-                                                              employee),
-                                                      icon:
-                                                          Icons.delete_outline,
-                                                    ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
-                            ),
-                          ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(
-                    '共 $_total 条记录',
-                    style: const TextStyle(color: AppColors.textSecondary),
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      OutlinedButton(
-                        onPressed: currentPage > 1
-                            ? () => _changePage(currentPage - 1)
-                            : null,
-                        child: const Text('上一页'),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text('$currentPage / $totalPages'),
-                      ),
-                      OutlinedButton(
-                        onPressed: currentPage < totalPages
-                            ? () => _changePage(currentPage + 1)
-                            : null,
-                        child: const Text('下一页'),
-                      ),
-                    ],
+              AppPageHeader(
+                title: '员工管理',
+                subtitle: '统一维护员工基础信息、组织关系和状态，保持组织数据持续可追溯。',
+                actions: [
+                  PermissionWidget(
+                    allowed: canAdd,
+                    showDisabledState: true,
+                    deniedTooltip: '当前账号没有此操作权限',
+                    child: ElevatedButton.icon(
+                      onPressed: _openCreate,
+                      icon: const Icon(Icons.person_add_alt_1_rounded),
+                      label: const Text('新建员工'),
+                    ),
                   ),
                 ],
               ),
-            ],
-          ),
-        );
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact =
-            constraints.maxHeight < 860 || constraints.maxWidth < 1180;
-        final statCompact = constraints.maxWidth < 1120;
-        final statWidth = constraints.maxWidth < 720
-            ? constraints.maxWidth
-            : statCompact
-                ? (constraints.maxWidth - 16) / 2
-                : (constraints.maxWidth - 48) / 4;
-
-        final content = [
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
-            children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
+              const SizedBox(height: 24),
+              Wrap(
+                spacing: 16,
+                runSpacing: 16,
+                children: [
+                  SizedBox(
+                    width: itemWidth.clamp(220.0, 320.0),
+                    child: AppMetricCard(
+                      icon: Icons.groups_rounded,
+                      color: AppColors.brandBlue,
+                      label: '检索结果总数',
+                      value: '${listState.total}',
+                      description: '当前筛选条件下的员工总量。',
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth.clamp(220.0, 320.0),
+                    child: AppMetricCard(
+                      icon: Icons.badge_rounded,
+                      color: AppColors.success,
+                      label: '当前页在职',
+                      value: '$activeCount',
+                      description: '便于快速判断当前页人员状态。',
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth.clamp(220.0, 320.0),
+                    child: AppMetricCard(
+                      icon: Icons.account_tree_rounded,
+                      color: AppColors.warning,
+                      label: '涉及部门',
+                      value: '$departmentCount',
+                      description: '当前结果中出现的部门数量。',
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth.clamp(220.0, 320.0),
+                    child: AppMetricCard(
+                      icon: Icons.workspace_premium_rounded,
+                      color: AppColors.danger,
+                      label: '涉及岗位',
+                      value: '$positionCount',
+                      description: '当前结果中出现的岗位数量。',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              AppCardSection(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      '员工管理',
+                      '筛选条件',
                       style: TextStyle(
-                        fontSize: 30,
+                        fontSize: 20,
                         fontWeight: FontWeight.w800,
                         color: AppColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      '统一维护员工档案、组织关系和状态信息。当前共 $_total 条记录。',
-                      style: const TextStyle(
-                          color: AppColors.textSecondary, height: 1.7),
+                    const SizedBox(height: 6),
+                    const Text(
+                      '支持按姓名、部门和状态快速过滤员工列表。',
+                      style: TextStyle(
+                          color: AppColors.textSecondary, height: 1.5),
                     ),
-                  ],
-                ),
-              ),
-              if (canAdd)
-                ElevatedButton.icon(
-                  onPressed: _openCreate,
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('新建员工'),
-                ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            children: [
-              SizedBox(
-                width: statWidth,
-                child: _EmployeeStatCard(
-                  title: '总记录',
-                  value: '$_total',
-                  note: '当前查询结果',
-                  color: AppColors.brandBlue,
-                ),
-              ),
-              SizedBox(
-                width: statWidth,
-                child: _EmployeeStatCard(
-                  title: '在职',
-                  value:
-                      '${_employees.where((item) => item.status == 'active').length}',
-                  note: '可正常使用',
-                  color: AppColors.success,
-                ),
-              ),
-              SizedBox(
-                width: statWidth,
-                child: _EmployeeStatCard(
-                  title: '停用',
-                  value:
-                      '${_employees.where((item) => item.status == 'inactive').length}',
-                  note: '账号或状态停用',
-                  color: AppColors.warning,
-                ),
-              ),
-              SizedBox(
-                width: statWidth,
-                child: _EmployeeStatCard(
-                  title: '离职',
-                  value:
-                      '${_employees.where((item) => item.status == 'left').length}',
-                  note: '已离开企业',
-                  color: AppColors.danger,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          card(
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '条件筛选',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    SizedBox(
-                      width: 240,
-                      child: TextField(
-                        controller: _keywordController,
-                        decoration:
-                            const InputDecoration(labelText: '姓名 / 工号 / 手机号'),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 180,
-                      child: DropdownButtonFormField<int?>(
-                        initialValue: _selectedDeptId,
-                        decoration: const InputDecoration(labelText: '部门'),
-                        items: [
-                          const DropdownMenuItem<int?>(
-                              value: null, child: Text('全部部门')),
-                          ..._departmentOptions.map(
-                            (item) => DropdownMenuItem<int?>(
-                              value: int.parse(item.value),
-                              child: Text(item.label),
-                            ),
+                    const SizedBox(height: 20),
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: [
+                        SizedBox(
+                          width: compact ? constraints.maxWidth : 260,
+                          child: AppSearchField(
+                            controller: _keywordController,
+                            hintText: '搜索姓名、工号',
+                            onSubmitted: () =>
+                                listController.search(_keywordController.text),
                           ),
-                        ],
-                        onChanged: (value) =>
-                            setState(() => _selectedDeptId = value),
-                      ),
+                        ),
+                        SizedBox(
+                          width: compact ? constraints.maxWidth : 220,
+                          child: AppSelectField<int>(
+                            value: listState.selectedDeptId,
+                            labelText: '部门',
+                            items: [
+                              const DropdownMenuItem<int>(
+                                value: null,
+                                child: Text('全部部门'),
+                              ),
+                              ...listState.departmentOptions.map(
+                                (item) => DropdownMenuItem(
+                                  value: int.parse(item.value),
+                                  child: Text(item.label),
+                                ),
+                              ),
+                            ],
+                            onChanged: listController.setDepartmentFilter,
+                          ),
+                        ),
+                        SizedBox(
+                          width: compact ? constraints.maxWidth : 220,
+                          child: AppSelectField<String>(
+                            value: listState.selectedStatus,
+                            labelText: '状态',
+                            items: const [
+                              DropdownMenuItem<String>(
+                                value: null,
+                                child: Text('全部状态'),
+                              ),
+                              DropdownMenuItem(
+                                  value: 'active', child: Text('在职')),
+                              DropdownMenuItem(
+                                value: 'inactive',
+                                child: Text('停用'),
+                              ),
+                              DropdownMenuItem(
+                                  value: 'left', child: Text('离职')),
+                            ],
+                            onChanged: listController.setStatusFilter,
+                          ),
+                        ),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            ElevatedButton(
+                              onPressed: () => listController
+                                  .search(_keywordController.text),
+                              child: const Text('查询'),
+                            ),
+                            OutlinedButton(
+                              onPressed: () async {
+                                _keywordController.clear();
+                                await listController.reset();
+                              },
+                              child: const Text('重置'),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
-                    SizedBox(
-                      width: 160,
-                      child: DropdownButtonFormField<String?>(
-                        initialValue: _selectedStatus,
-                        decoration: const InputDecoration(labelText: '状态'),
-                        items: const [
-                          DropdownMenuItem<String?>(
-                              value: null, child: Text('全部状态')),
-                          DropdownMenuItem<String?>(
-                              value: 'active', child: Text('在职')),
-                          DropdownMenuItem<String?>(
-                              value: 'inactive', child: Text('停用')),
-                          DropdownMenuItem<String?>(
-                              value: 'left', child: Text('离职')),
-                        ],
-                        onChanged: (value) =>
-                            setState(() => _selectedStatus = value),
-                      ),
-                    ),
-                    ElevatedButton(
-                        onPressed: _onSearch, child: const Text('查询')),
-                    OutlinedButton(
-                        onPressed: _resetFilters, child: const Text('重置')),
                   ],
                 ),
-              ],
-            ),
+              ),
+              const SizedBox(height: 24),
+              AppTableSection(
+                title: '员工列表',
+                subtitle: listState.loading
+                    ? '正在加载员工数据。'
+                    : '共 ${listState.total} 名员工，支持编辑和删除操作。',
+                footer: listState.loading ||
+                        listState.errorMessage != null ||
+                        listState.employees.isEmpty
+                    ? null
+                    : AppPaginationBar(
+                        page: listState.query.page,
+                        pageSize: listState.query.pageSize,
+                        total: listState.total,
+                        onPageChanged: listController.changePage,
+                      ),
+                child: _buildBody(listState),
+              ),
+            ],
           ),
-          const SizedBox(height: 18),
-        ];
-
-        if (compact) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ...content,
-                SizedBox(height: 560, child: tablePanel()),
-              ],
-            ),
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ...content,
-            Expanded(child: tablePanel()),
-          ],
         );
       },
     );
   }
-}
 
-Widget _field(Widget child) => Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: child,
-    );
+  Widget _buildBody(EmployeeListState listState) {
+    final canEdit = appAuthController.hasPermission(PermissionCodes.empEdit);
+    final canDelete =
+        appAuthController.hasPermission(PermissionCodes.empDelete);
 
-class _EmployeeStatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final String note;
-  final Color color;
+    if (listState.loading) {
+      return const AppTableLoadingSkeleton(rows: 6, columns: 8);
+    }
 
-  const _EmployeeStatCard({
-    required this.title,
-    required this.value,
-    required this.note,
-    required this.color,
-  });
+    if (listState.errorMessage != null) {
+      return AppErrorState(
+        message: listState.errorMessage!,
+        onRetry: ref.read(employeeListControllerProvider).load,
+      );
+    }
 
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            alignment: Alignment.center,
-            child: Icon(Icons.people_alt_rounded, color: color),
-          ),
-          const SizedBox(height: 18),
-          Text(title,
-              style: const TextStyle(
-                  color: AppColors.textSecondary, fontSize: 14)),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Text(note,
-              style: const TextStyle(color: AppColors.textHint, height: 1.5)),
+    if (listState.employees.isEmpty) {
+      return AppEmptyState(
+        title: '暂无数据',
+        message: '当前没有符合条件的员工记录，试试调整筛选条件。',
+        action: OutlinedButton(
+          onPressed: () async {
+            _keywordController.clear();
+            await ref.read(employeeListControllerProvider).reset();
+          },
+          child: const Text('清空筛选'),
+        ),
+      );
+    }
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        headingRowColor: WidgetStateProperty.all(
+          AppColors.bgGray.withValues(alpha: 0.7),
+        ),
+        columns: const [
+          DataColumn(label: Text('工号')),
+          DataColumn(label: Text('姓名')),
+          DataColumn(label: Text('部门')),
+          DataColumn(label: Text('岗位')),
+          DataColumn(label: Text('状态')),
+          DataColumn(label: Text('入职日期')),
+          DataColumn(label: Text('直属上级')),
+          DataColumn(label: Text('操作')),
         ],
+        rows: listState.employees
+            .map(
+              (employee) => DataRow(
+                cells: [
+                  DataCell(Text(employee.empNo)),
+                  DataCell(Text(employee.name)),
+                  DataCell(Text(employee.deptName)),
+                  DataCell(Text(employee.positionName)),
+                  DataCell(_buildStatus(employee.status)),
+                  DataCell(Text(employee.hireDate)),
+                  DataCell(Text(employee.leaderName ?? '-')),
+                  DataCell(
+                    SizedBox(
+                      width: 92,
+                      child: Row(
+                        children: [
+                          PermissionWidget(
+                            allowed: canEdit,
+                            showDisabledState: true,
+                            deniedTooltip: '当前账号没有此操作权限',
+                            child: AppIconActionButton(
+                              icon: Icons.edit_outlined,
+                              tooltip: '编辑员工',
+                              onPressed: () => _openEdit(employee),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          PermissionWidget(
+                            allowed: canDelete,
+                            showDisabledState: true,
+                            deniedTooltip: '当前账号没有此操作权限',
+                            child: AppIconActionButton(
+                              icon: Icons.delete_outline_rounded,
+                              tooltip: '删除员工',
+                              color: AppColors.danger,
+                              onPressed: () => _deleteEmployee(employee),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+            .toList(),
       ),
     );
   }
-}
 
-class _StatusTag extends StatelessWidget {
-  final String status;
+  Widget _buildStatus(String status) {
+    switch (status) {
+      case 'active':
+        return const AppStatusPill(label: '在职', color: AppColors.success);
+      case 'inactive':
+        return const AppStatusPill(label: '停用', color: AppColors.warning);
+      case 'left':
+        return const AppStatusPill(label: '离职', color: AppColors.danger);
+      default:
+        return const AppStatusPill(label: '未知', color: AppColors.textHint);
+    }
+  }
 
-  const _StatusTag({required this.status});
-
-  @override
-  Widget build(BuildContext context) {
-    final (label, color) = switch (status) {
-      'active' => ('在职', AppColors.success),
-      'inactive' => ('停用', AppColors.warning),
-      'left' => ('离职', AppColors.danger),
-      _ => (status, AppColors.textSecondary),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
+  Widget _buildSectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
       child: Text(
-        label,
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
+        title,
+        style: const TextStyle(
+          fontSize: 18,
           fontWeight: FontWeight.w700,
+          color: AppColors.textPrimary,
         ),
       ),
     );
   }
-}
 
-class _EmployeeEmptyState extends StatelessWidget {
-  const _EmployeeEmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.inbox_rounded, size: 40, color: AppColors.textHint),
-          SizedBox(height: 14),
-          Text(
-            '没有找到符合条件的员工记录',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            '你可以调整筛选条件，或新建一条员工档案。',
-            style: TextStyle(color: AppColors.textSecondary),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _TableActionButton extends StatelessWidget {
-  final String tooltip;
-  final VoidCallback onPressed;
-  final IconData icon;
-
-  const _TableActionButton({
-    required this.tooltip,
-    required this.onPressed,
-    required this.icon,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return IconButton(
-      tooltip: tooltip,
-      onPressed: onPressed,
-      icon: Icon(icon, size: 20),
-      padding: EdgeInsets.zero,
-      visualDensity: VisualDensity.compact,
-      constraints: const BoxConstraints.tightFor(width: 36, height: 36),
-      splashRadius: 18,
+  Widget _buildField(Widget child) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: child,
     );
   }
 }

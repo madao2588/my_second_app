@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import 'content/app_copy.dart';
 import 'router/app_router.dart';
 import 'theme/app_theme.dart';
 
@@ -9,7 +10,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: '企业基础信息管理平台',
+      title: AppCopy.appTitle,
       theme: AppTheme.light,
       routerConfig: appRouter,
       debugShowCheckedModeBanner: false,

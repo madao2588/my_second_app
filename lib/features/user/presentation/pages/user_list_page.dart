@@ -1,48 +1,48 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_second_app/app/theme/app_colors.dart';
+import 'package:my_second_app/core/constants/app_breakpoints.dart';
 import 'package:my_second_app/core/constants/permission_codes.dart';
+import 'package:my_second_app/core/permissions/permission_widget.dart';
 import 'package:my_second_app/core/network/api_result.dart';
+import 'package:my_second_app/core/widgets/app_button.dart';
+import 'package:my_second_app/core/widgets/app_card.dart';
+import 'package:my_second_app/core/widgets/app_confirm_dialog.dart';
+import 'package:my_second_app/core/widgets/app_drawer_form.dart';
+import 'package:my_second_app/core/widgets/app_empty.dart';
+import 'package:my_second_app/core/widgets/app_error_state.dart';
+import 'package:my_second_app/core/widgets/app_feedback.dart';
+import 'package:my_second_app/core/widgets/app_loading_skeleton.dart';
+import 'package:my_second_app/core/widgets/app_metric_card.dart';
+import 'package:my_second_app/core/widgets/app_page_header.dart';
+import 'package:my_second_app/core/widgets/app_pagination.dart';
+import 'package:my_second_app/core/widgets/app_search_field.dart';
+import 'package:my_second_app/core/widgets/app_select.dart';
+import 'package:my_second_app/core/widgets/app_status_pill.dart';
+import 'package:my_second_app/core/widgets/app_table.dart';
 import 'package:my_second_app/features/auth/presentation/providers/auth_provider.dart';
-import 'package:my_second_app/features/employee/data/models/employee_query.dart';
-import 'package:my_second_app/features/role/data/models/role_query.dart';
 import 'package:my_second_app/features/user/data/models/user_form_data.dart';
-import 'package:my_second_app/features/user/data/models/user_query.dart';
-import 'package:my_second_app/shared/models/role_model.dart';
+import 'package:my_second_app/features/user/presentation/providers/user_list_provider.dart';
+import 'package:my_second_app/features/user/presentation/states/user_list_state.dart';
 import 'package:my_second_app/shared/models/user_model.dart';
-import 'package:my_second_app/shared/repositories/employee_repository.dart';
-import 'package:my_second_app/shared/repositories/role_repository.dart';
 import 'package:my_second_app/shared/repositories/user_repository.dart';
 
-class UserListPage extends StatefulWidget {
+class UserListPage extends ConsumerStatefulWidget {
   const UserListPage({super.key});
 
   @override
-  State<UserListPage> createState() => _UserListPageState();
+  ConsumerState<UserListPage> createState() => _UserListPageState();
 }
 
-class _UserListPageState extends State<UserListPage> {
-  final _keywordController = TextEditingController();
+class _UserListPageState extends ConsumerState<UserListPage> {
+  final TextEditingController _keywordController = TextEditingController();
   late final UserRepository _usersApi;
-  late final RoleRepository _rolesApi;
-  late final EmployeeRepository _employeesApi;
-
-  UserQuery _query = const UserQuery();
-  List<UserModel> _items = const [];
-  List<RoleModel> _roles = const [];
-  List<Map<String, dynamic>> _employees = const [];
-  bool _loading = true;
-  String? _error;
-  int _total = 0;
-  int? _status;
 
   @override
   void initState() {
     super.initState();
-    final dio = appAuthController.dio;
-    _usersApi = UserRepository(dio);
-    _rolesApi = RoleRepository(dio);
-    _employeesApi = EmployeeRepository(dio);
-    _init();
+    _usersApi = UserRepository(appAuthController.dio);
+    Future.microtask(_init);
   }
 
   @override
@@ -52,79 +52,28 @@ class _UserListPageState extends State<UserListPage> {
   }
 
   Future<void> _init() async {
-    await Future.wait([_loadOptions(), _load()]);
-  }
-
-  Future<void> _loadOptions() async {
-    try {
-      final roles =
-          await _rolesApi.fetchRoles(const RoleQuery(page: 1, pageSize: 100));
-      final employees = await _employeesApi
-          .fetchEmployees(const EmployeeQuery(page: 1, pageSize: 100));
-      if (!mounted) return;
-      setState(() {
-        _roles = roles.items;
-        _employees = employees.items
-            .map((employee) => {'id': employee.id, 'name': employee.name})
-            .toList();
-      });
-    } catch (_) {}
+    await ref.read(userListControllerProvider).bootstrap();
   }
 
   Future<void> _load() async {
-    setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      final result = await _usersApi.fetchUsers(_query);
-      if (!mounted) return;
-      setState(() {
-        _items = result.items;
-        _total = result.total;
-        _loading = false;
-      });
-    } on ApiException catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = error.message;
-      });
-    } catch (_) {
-      if (!mounted) return;
-      setState(() {
-        _loading = false;
-        _error = '用户数据加载失败';
-      });
-    }
+    await ref.read(userListControllerProvider).load();
   }
 
   Future<void> _search() async {
-    _query = _query.copyWith(
-      page: 1,
-      keyword: _keywordController.text.trim(),
-      status: _status,
-    );
-    await _load();
+    await ref.read(userListControllerProvider).search(_keywordController.text);
   }
 
   Future<void> _reset() async {
     _keywordController.clear();
-    setState(() {
-      _status = null;
-      _query = const UserQuery();
-    });
-    await _load();
+    await ref.read(userListControllerProvider).reset();
   }
 
   Future<void> _changePage(int page) async {
-    final maxPage = (_total / _query.pageSize).ceil();
-    if (page < 1 || (maxPage > 0 && page > maxPage)) return;
-    _query = _query.copyWith(page: page);
-    await _load();
+    await ref.read(userListControllerProvider).changePage(page);
   }
 
-  Future<void> _openForm([UserModel? user]) async {
+  Future<void> _showUserForm([UserModel? user]) async {
+    final listState = ref.read(userListControllerProvider).state;
     final isEdit = user != null;
     Map<String, dynamic>? detail;
     if (isEdit) {
@@ -147,244 +96,191 @@ class _UserListPageState extends State<UserListPage> {
     bool saving = false;
     String? formError;
 
-    final ok = await showDialog<bool>(
+    final result = await showGeneralDialog<bool>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setModalState) {
-          final media = MediaQuery.of(context).size;
-          final dialogWidth = media.width < 520 ? media.width * 0.92 : 420.0;
-          final dialogHeight = media.height < 720 ? media.height * 0.88 : 680.0;
+      barrierDismissible: true,
+      barrierLabel: 'user_form',
+      barrierColor: Colors.black.withValues(alpha: 0.28),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (context, _, __) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            Future<void> submit() async {
+              if (!formKey.currentState!.validate()) return;
 
-          Future<void> submit() async {
-            if (!formKey.currentState!.validate()) return;
-            final payload = UserFormData(
-              username: usernameController.text.trim(),
-              password: isEdit
-                  ? (passwordController.text.trim().isEmpty
-                      ? null
-                      : passwordController.text.trim())
-                  : passwordController.text.trim(),
-              realName: realNameController.text.trim(),
-              phone: phoneController.text.trim().isEmpty
-                  ? null
-                  : phoneController.text.trim(),
-              email: emailController.text.trim().isEmpty
-                  ? null
-                  : emailController.text.trim(),
-              employeeId: employeeId,
-              status: status,
-            );
+              final payload = UserFormData(
+                username: usernameController.text.trim(),
+                password: isEdit
+                    ? (passwordController.text.trim().isEmpty
+                        ? null
+                        : passwordController.text.trim())
+                    : passwordController.text.trim(),
+                realName: realNameController.text.trim(),
+                phone: phoneController.text.trim().isEmpty
+                    ? null
+                    : phoneController.text.trim(),
+                email: emailController.text.trim().isEmpty
+                    ? null
+                    : emailController.text.trim(),
+                employeeId: employeeId,
+                status: status,
+              );
 
-            setModalState(() {
-              saving = true;
-              formError = null;
-            });
-            try {
-              if (isEdit) {
-                final data = payload.toJson()
-                  ..remove('username')
-                  ..remove('password');
-                await _usersApi.updateUser(user.id, data);
-              } else {
-                await _usersApi.createUser(payload);
-              }
-              if (!context.mounted) return;
-              Navigator.pop(context, true);
-            } on ApiException catch (error) {
               setModalState(() {
-                saving = false;
-                formError = error.message;
+                saving = true;
+                formError = null;
               });
-            }
-          }
 
-          return Dialog(
-            insetPadding: EdgeInsets.symmetric(
-              horizontal: media.width < 480 ? 12 : 24,
-              vertical: media.height < 640 ? 12 : 24,
-            ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: dialogWidth,
-                maxHeight: dialogHeight,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
+              try {
+                if (isEdit) {
+                  final data = payload.toJson()..remove('username');
+                  if (passwordController.text.trim().isEmpty) {
+                    data.remove('password');
+                  }
+                  await _usersApi.updateUser(user.id, data);
+                } else {
+                  await _usersApi.createUser(payload);
+                }
+                if (!context.mounted) return;
+                Navigator.pop(context, true);
+              } on ApiException catch (error) {
+                setModalState(() {
+                  saving = false;
+                  formError = error.message;
+                });
+              } catch (_) {
+                setModalState(() {
+                  saving = false;
+                  formError = isEdit ? '用户更新失败，请稍后重试。' : '用户创建失败，请稍后重试。';
+                });
+              }
+            }
+
+            return AppDrawerForm(
+              title: isEdit ? '编辑用户' : '新建用户',
+              subtitle: isEdit ? '维护账号信息、绑定员工关系和启用状态。' : '创建新的系统账号，并绑定到员工档案。',
+              onClose: () => Navigator.pop(context, false),
+              maxWidth: 520,
+              footerActions: [
+                OutlinedButton(
+                  onPressed:
+                      saving ? null : () => Navigator.pop(context, false),
+                  child: const Text('取消'),
+                ),
+                ElevatedButton(
+                  onPressed: saving ? null : submit,
+                  child: saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : Text(isEdit ? '保存修改' : '创建用户'),
+                ),
+              ],
+              child: Form(
+                key: formKey,
                 child: Column(
-                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      isEdit ? '编辑用户' : '新建用户',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
+                    _sectionTitle('账号信息'),
+                    _field(
+                      TextFormField(
+                        controller: usernameController,
+                        enabled: !isEdit,
+                        decoration: const InputDecoration(labelText: '登录账号'),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                                ? '请输入登录账号'
+                                : null,
+                      ),
+                    ),
+                    _field(
+                      TextFormField(
+                        controller: passwordController,
+                        obscureText: true,
+                        decoration: InputDecoration(
+                          labelText: isEdit ? '重置密码（留空则不修改）' : '登录密码',
+                        ),
+                        validator: (value) {
+                          if (!isEdit &&
+                              (value == null || value.trim().length < 6)) {
+                            return '密码至少 6 位';
+                          }
+                          return null;
+                        },
+                      ),
+                    ),
+                    _field(
+                      TextFormField(
+                        controller: realNameController,
+                        decoration: const InputDecoration(labelText: '姓名'),
+                        validator: (value) =>
+                            value == null || value.trim().isEmpty
+                                ? '请输入姓名'
+                                : null,
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      isEdit ? '维护账号信息、绑定员工与启用状态。' : '创建新的系统账号，并绑定到员工档案。',
-                      style: const TextStyle(
-                          color: AppColors.textSecondary, height: 1.6),
-                    ),
-                    const SizedBox(height: 20),
-                    Flexible(
-                      child: Form(
-                        key: formKey,
-                        child: SingleChildScrollView(
-                          child: Column(
-                            children: [
-                              _field(
-                                TextFormField(
-                                  controller: usernameController,
-                                  enabled: !isEdit,
-                                  decoration:
-                                      const InputDecoration(labelText: '登录账号'),
-                                  validator: (value) {
-                                    if (value == null || value.trim().isEmpty) {
-                                      return '请输入登录账号';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                              ),
-                              _field(
-                                TextFormField(
-                                  controller: passwordController,
-                                  obscureText: true,
-                                  decoration: InputDecoration(
-                                    labelText: isEdit ? '重置密码（留空则不修改）' : '登录密码',
-                                  ),
-                                  validator: (value) {
-                                    if (!isEdit &&
-                                        (value == null ||
-                                            value.trim().length < 6)) {
-                                      return '密码至少 6 位';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                              ),
-                              _field(
-                                TextFormField(
-                                  controller: realNameController,
-                                  decoration:
-                                      const InputDecoration(labelText: '姓名'),
-                                  validator: (value) {
-                                    if (value == null || value.trim().isEmpty) {
-                                      return '请输入姓名';
-                                    }
-                                    return null;
-                                  },
-                                ),
-                              ),
-                              _field(
-                                DropdownButtonFormField<int?>(
-                                  initialValue: employeeId,
-                                  decoration:
-                                      const InputDecoration(labelText: '绑定员工'),
-                                  items: [
-                                    const DropdownMenuItem<int?>(
-                                      value: null,
-                                      child: Text('暂不绑定'),
-                                    ),
-                                    ..._employees.map(
-                                      (employee) => DropdownMenuItem<int?>(
-                                        value: employee['id'] as int,
-                                        child: Text(employee['name'] as String),
-                                      ),
-                                    ),
-                                  ],
-                                  onChanged: (value) =>
-                                      setModalState(() => employeeId = value),
-                                ),
-                              ),
-                              _field(
-                                TextFormField(
-                                  controller: phoneController,
-                                  decoration:
-                                      const InputDecoration(labelText: '手机号'),
-                                ),
-                              ),
-                              _field(
-                                TextFormField(
-                                  controller: emailController,
-                                  decoration:
-                                      const InputDecoration(labelText: '邮箱'),
-                                ),
-                              ),
-                              DropdownButtonFormField<int>(
-                                initialValue: status,
-                                decoration:
-                                    const InputDecoration(labelText: '状态'),
-                                items: const [
-                                  DropdownMenuItem(value: 1, child: Text('启用')),
-                                  DropdownMenuItem(value: 0, child: Text('禁用')),
-                                ],
-                                onChanged: (value) =>
-                                    setModalState(() => status = value ?? 1),
-                              ),
-                              if (formError != null) ...[
-                                const SizedBox(height: 14),
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(12),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.danger
-                                        .withValues(alpha: 0.08),
-                                    borderRadius: BorderRadius.circular(14),
-                                  ),
-                                  child: Text(
-                                    formError!,
-                                    style: const TextStyle(
-                                      color: AppColors.danger,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ],
+                    _sectionTitle('绑定与状态'),
+                    _field(
+                      AppSelectField<int>(
+                        value: employeeId,
+                        labelText: '绑定员工',
+                        items: [
+                          const DropdownMenuItem<int>(
+                            value: null,
+                            child: Text('暂不绑定'),
                           ),
-                        ),
+                          ...listState.employees.map(
+                            (employee) => DropdownMenuItem<int>(
+                              value: employee['id'] as int,
+                              child: Text(employee['name'] as String),
+                            ),
+                          ),
+                        ],
+                        onChanged: (value) =>
+                            setModalState(() => employeeId = value),
                       ),
                     ),
-                    const SizedBox(height: 20),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: saving
-                                ? null
-                                : () => Navigator.pop(context, false),
-                            child: const Text('取消'),
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: saving ? null : submit,
-                            child: saving
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : Text(isEdit ? '保存' : '创建'),
-                          ),
-                        ),
-                      ],
+                    _field(
+                      TextFormField(
+                        controller: phoneController,
+                        decoration: const InputDecoration(labelText: '手机号'),
+                      ),
                     ),
+                    _field(
+                      TextFormField(
+                        controller: emailController,
+                        decoration: const InputDecoration(labelText: '邮箱'),
+                      ),
+                    ),
+                    _field(
+                      AppSelectField<int>(
+                        value: status,
+                        labelText: '状态',
+                        items: const [
+                          DropdownMenuItem(value: 1, child: Text('启用')),
+                          DropdownMenuItem(value: 0, child: Text('禁用')),
+                        ],
+                        onChanged: (value) =>
+                            setModalState(() => status = value ?? 1),
+                      ),
+                    ),
+                    if (formError != null) ...[
+                      const SizedBox(height: 18),
+                      _errorBox(formError!),
+                    ],
                   ],
                 ),
               ),
-            ),
-          );
-        },
-      ),
+            );
+          },
+        );
+      },
     );
 
     usernameController.dispose();
@@ -393,7 +289,7 @@ class _UserListPageState extends State<UserListPage> {
     phoneController.dispose();
     emailController.dispose();
 
-    if (ok == true) {
+    if (result == true) {
       await _load();
       if (user != null && appAuthController.state.user?.id == user.id) {
         await appAuthController.refreshCurrentUser();
@@ -401,7 +297,8 @@ class _UserListPageState extends State<UserListPage> {
     }
   }
 
-  Future<void> _assignRoles(UserModel user) async {
+  Future<void> _showAssignRoles(UserModel user) async {
+    final listState = ref.read(userListControllerProvider).state;
     final detail = await _usersApi.fetchUserDetail(user.id);
     if (!mounted) return;
 
@@ -409,145 +306,98 @@ class _UserListPageState extends State<UserListPage> {
         .cast<int>()
         .toSet();
     bool saving = false;
-    String? error;
+    String? formError;
 
-    final ok = await showDialog<bool>(
+    final result = await showGeneralDialog<bool>(
       context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setModalState) {
-          final media = MediaQuery.of(context).size;
-          final dialogWidth = media.width < 560 ? media.width * 0.92 : 440.0;
-          final dialogHeight = media.height < 720 ? media.height * 0.88 : 620.0;
-
-          Future<void> submit() async {
-            setModalState(() {
-              saving = true;
-              error = null;
-            });
-            try {
-              await _usersApi.assignRoles(user.id, selected.toList()..sort());
-              if (!context.mounted) return;
-              Navigator.pop(context, true);
-            } on ApiException catch (exception) {
+      barrierDismissible: true,
+      barrierLabel: 'assign_roles',
+      barrierColor: Colors.black.withValues(alpha: 0.28),
+      transitionDuration: const Duration(milliseconds: 220),
+      pageBuilder: (context, _, __) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            Future<void> submit() async {
               setModalState(() {
-                saving = false;
-                error = exception.message;
+                saving = true;
+                formError = null;
               });
+              try {
+                await _usersApi.assignRoles(user.id, selected.toList()..sort());
+                if (!context.mounted) return;
+                Navigator.pop(context, true);
+              } on ApiException catch (exception) {
+                setModalState(() {
+                  saving = false;
+                  formError = exception.message;
+                });
+              }
             }
-          }
 
-          return Dialog(
-            insetPadding: EdgeInsets.symmetric(
-              horizontal: media.width < 480 ? 12 : 24,
-              vertical: media.height < 640 ? 12 : 24,
-            ),
-            child: ConstrainedBox(
-              constraints: BoxConstraints(
-                maxWidth: dialogWidth,
-                maxHeight: dialogHeight,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      '分配角色 · ${user.realName}',
-                      style: const TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      '勾选该账号可用的角色，保存后即时生效。',
-                      style: TextStyle(
-                          color: AppColors.textSecondary, height: 1.6),
-                    ),
-                    const SizedBox(height: 20),
-                    Expanded(
-                      child: _roles.isEmpty
-                          ? const Center(
-                              child: Text(
-                                '当前还没有可分配的角色',
-                                style:
-                                    TextStyle(color: AppColors.textSecondary),
-                              ),
-                            )
-                          : SingleChildScrollView(
-                              child: Column(
-                                children: _roles
-                                    .map(
-                                      (role) => CheckboxListTile(
-                                        value: selected.contains(role.id),
-                                        title: Text(role.roleName),
-                                        subtitle: Text(role.roleCode),
-                                        controlAffinity:
-                                            ListTileControlAffinity.leading,
-                                        contentPadding: EdgeInsets.zero,
-                                        onChanged: (value) {
-                                          setModalState(() {
-                                            if (value == true) {
-                                              selected.add(role.id);
-                                            } else {
-                                              selected.remove(role.id);
-                                            }
-                                          });
-                                        },
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
-                            ),
-                    ),
-                    if (error != null) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        error!,
-                        style: const TextStyle(color: AppColors.danger),
-                      ),
-                    ],
-                    const SizedBox(height: 20),
-                    Row(
+            return AppDrawerForm(
+              title: '分配角色',
+              subtitle: '为 ${user.realName} 配置可用角色，保存后立即生效。',
+              onClose: () => Navigator.pop(context, false),
+              maxWidth: 500,
+              footerActions: [
+                OutlinedButton(
+                  onPressed:
+                      saving ? null : () => Navigator.pop(context, false),
+                  child: const Text('取消'),
+                ),
+                ElevatedButton(
+                  onPressed: saving ? null : submit,
+                  child: saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('保存角色'),
+                ),
+              ],
+              child: listState.roles.isEmpty
+                  ? const AppEmptyState(
+                      title: '暂无可分配角色',
+                      message: '请先在角色权限中创建角色，再回来为用户分配。',
+                    )
+                  : Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Expanded(
-                          child: OutlinedButton(
-                            onPressed: saving
-                                ? null
-                                : () => Navigator.pop(context, false),
-                            child: const Text('取消'),
+                        ...listState.roles.map(
+                          (role) => CheckboxListTile(
+                            value: selected.contains(role.id),
+                            title: Text(role.roleName),
+                            subtitle: Text(role.roleCode),
+                            controlAffinity: ListTileControlAffinity.leading,
+                            contentPadding: EdgeInsets.zero,
+                            onChanged: (checked) {
+                              setModalState(() {
+                                if (checked == true) {
+                                  selected.add(role.id);
+                                } else {
+                                  selected.remove(role.id);
+                                }
+                              });
+                            },
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: saving ? null : submit,
-                            child: saving
-                                ? const SizedBox(
-                                    width: 18,
-                                    height: 18,
-                                    child: CircularProgressIndicator(
-                                      strokeWidth: 2,
-                                      color: Colors.white,
-                                    ),
-                                  )
-                                : const Text('保存'),
-                          ),
-                        ),
+                        if (formError != null) ...[
+                          const SizedBox(height: 18),
+                          _errorBox(formError!),
+                        ],
                       ],
                     ),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      ),
+            );
+          },
+        );
+      },
     );
 
-    if (ok == true) {
+    if (result == true) {
       await _load();
       if (appAuthController.state.user?.id == user.id) {
         await appAuthController.refreshCurrentUser();
@@ -555,25 +405,14 @@ class _UserListPageState extends State<UserListPage> {
     }
   }
 
-  Future<void> _delete(UserModel user) async {
-    final ok = await showDialog<bool>(
+  Future<void> _deleteUser(UserModel user) async {
+    final ok = await showAppConfirmDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('确认删除'),
-        content: Text('确定要删除账号“${user.username}”吗？'),
-        actions: [
-          TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('取消')),
-          ElevatedButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.danger),
-            child: const Text('删除'),
-          ),
-        ],
-      ),
+      title: '确认删除',
+      message: '确认要删除用户“${user.username}”吗？',
+      confirmText: '删除',
     );
-    if (ok != true) return;
+    if (!ok) return;
 
     try {
       await _usersApi.deleteUser(user.id);
@@ -581,8 +420,7 @@ class _UserListPageState extends State<UserListPage> {
       await _load();
     } on ApiException catch (error) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text(error.message)));
+      showAppError(context, error.message);
     }
   }
 
@@ -594,436 +432,342 @@ class _UserListPageState extends State<UserListPage> {
         appAuthController.hasPermission(PermissionCodes.userDelete);
     final canAssign =
         appAuthController.hasPermission(PermissionCodes.userAssignRole);
-    final pageCount = _total == 0 ? 1 : (_total / _query.pageSize).ceil();
-
-    Widget card(Widget child) => Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(20),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(24),
-            border: Border.all(color: AppColors.line),
-          ),
-          child: child,
-        );
-
-    Widget tablePanel() => card(
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '共 $_total 个账号',
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: AppColors.textPrimary,
-                ),
-              ),
-              if (_error != null) ...[
-                const SizedBox(height: 12),
-                Text(_error!, style: const TextStyle(color: AppColors.danger)),
-              ],
-              const SizedBox(height: 12),
-              Expanded(
-                child: _loading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _items.isEmpty
-                        ? const _UserEmptyState()
-                        : SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: SingleChildScrollView(
-                              child: DataTable(
-                                columnSpacing: 24,
-                                headingRowColor: WidgetStateProperty.all(
-                                    const Color(0xFFF8FAFC)),
-                                columns: const [
-                                  DataColumn(label: Text('账号')),
-                                  DataColumn(label: Text('姓名')),
-                                  DataColumn(label: Text('绑定员工')),
-                                  DataColumn(label: Text('角色')),
-                                  DataColumn(label: Text('状态')),
-                                  DataColumn(label: Text('最后登录')),
-                                  DataColumn(label: Text('操作')),
-                                ],
-                                rows: _items
-                                    .map(
-                                      (user) => DataRow(
-                                        cells: [
-                                          DataCell(Text(user.username)),
-                                          DataCell(Text(user.realName)),
-                                          DataCell(
-                                              Text(user.employeeName ?? '-')),
-                                          DataCell(
-                                            SizedBox(
-                                              width: 200,
-                                              child: Text(
-                                                user.roleNames.isEmpty
-                                                    ? '-'
-                                                    : user.roleNames
-                                                        .join(' / '),
-                                                maxLines: 2,
-                                                overflow: TextOverflow.ellipsis,
-                                              ),
-                                            ),
-                                          ),
-                                          DataCell(_StatusPill(
-                                              enabled: user.status == 1)),
-                                          DataCell(Text(
-                                              _formatTime(user.lastLoginAt))),
-                                          DataCell(
-                                            Wrap(
-                                              spacing: 4,
-                                              children: [
-                                                if (canEdit)
-                                                  IconButton(
-                                                    tooltip: '编辑',
-                                                    onPressed: () =>
-                                                        _openForm(user),
-                                                    icon: const Icon(
-                                                        Icons.edit_outlined),
-                                                  ),
-                                                if (canAssign)
-                                                  IconButton(
-                                                    tooltip: '分配角色',
-                                                    onPressed: () =>
-                                                        _assignRoles(user),
-                                                    icon: const Icon(
-                                                      Icons
-                                                          .manage_accounts_outlined,
-                                                    ),
-                                                  ),
-                                                if (canDelete)
-                                                  IconButton(
-                                                    tooltip: '删除',
-                                                    onPressed: () =>
-                                                        _delete(user),
-                                                    icon: const Icon(
-                                                        Icons.delete_outline),
-                                                  ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    )
-                                    .toList(),
-                              ),
-                            ),
-                          ),
-              ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                alignment: WrapAlignment.spaceBetween,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  Text(
-                    '第 ${_query.page} / $pageCount 页',
-                    style: const TextStyle(color: AppColors.textSecondary),
-                  ),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      OutlinedButton(
-                        onPressed: _query.page > 1
-                            ? () => _changePage(_query.page - 1)
-                            : null,
-                        child: const Text('上一页'),
-                      ),
-                      const SizedBox(width: 8),
-                      OutlinedButton(
-                        onPressed: _query.page < pageCount
-                            ? () => _changePage(_query.page + 1)
-                            : null,
-                        child: const Text('下一页'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
+    final listController = ref.watch(userListControllerProvider);
+    final listState = listController.state;
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final compact =
-            constraints.maxHeight < 860 || constraints.maxWidth < 1180;
-        final statCompact = constraints.maxWidth < 1120;
-        final statWidth = constraints.maxWidth < 720
-            ? constraints.maxWidth
-            : statCompact
-                ? (constraints.maxWidth - 16) / 2
-                : (constraints.maxWidth - 48) / 4;
+        final compact = constraints.maxWidth < AppBreakpoints.compactDesktop;
+        final cardsPerRow = compact ? 2 : 4;
+        final itemWidth =
+            (constraints.maxWidth - ((cardsPerRow - 1) * 16)) / cardsPerRow;
+        final enabledCount =
+            listState.items.where((item) => item.status == 1).length;
+        final disabledCount =
+            listState.items.where((item) => item.status == 0).length;
+        final boundCount =
+            listState.items.where((item) => item.employeeId != null).length;
 
-        final content = [
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            alignment: WrapAlignment.spaceBetween,
-            crossAxisAlignment: WrapCrossAlignment.center,
+        return SingleChildScrollView(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 760),
+              AppPageHeader(
+                title: '用户管理',
+                subtitle: '维护系统账号、绑定员工关系与角色分配，保证账号体系持续可控。',
+                actions: [
+                  if (canAdd)
+                    ElevatedButton.icon(
+                      onPressed: _showUserForm,
+                      icon: const Icon(Icons.person_add_alt_1_rounded),
+                      label: const Text('新建用户'),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              Wrap(
+                spacing: 16,
+                runSpacing: 16,
+                children: [
+                  SizedBox(
+                    width: itemWidth.clamp(220.0, 320.0),
+                    child: AppMetricCard(
+                      icon: Icons.manage_accounts_rounded,
+                      color: AppColors.brandBlue,
+                      label: '账号总数',
+                      value: '${listState.total}',
+                      description: '当前筛选结果中的用户账号总量。',
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth.clamp(220.0, 320.0),
+                    child: AppMetricCard(
+                      icon: Icons.check_circle_outline_rounded,
+                      color: AppColors.success,
+                      label: '启用账号',
+                      value: '$enabledCount',
+                      description: '当前结果中处于启用状态的账号数量。',
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth.clamp(220.0, 320.0),
+                    child: AppMetricCard(
+                      icon: Icons.block_outlined,
+                      color: AppColors.warning,
+                      label: '禁用账号',
+                      value: '$disabledCount',
+                      description: '当前结果中被禁用的账号数量。',
+                    ),
+                  ),
+                  SizedBox(
+                    width: itemWidth.clamp(220.0, 320.0),
+                    child: AppMetricCard(
+                      icon: Icons.badge_outlined,
+                      color: AppColors.danger,
+                      label: '已绑定员工',
+                      value: '$boundCount',
+                      description: '已经绑定员工档案的账号数量。',
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+              AppCardSection(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      '用户管理',
+                      '筛选条件',
                       style: TextStyle(
-                        fontSize: 30,
+                        fontSize: 20,
                         fontWeight: FontWeight.w800,
                         color: AppColors.textPrimary,
                       ),
                     ),
-                    const SizedBox(height: 10),
-                    Text(
-                      '维护系统账号、绑定员工关系与角色分配。当前共有 $_total 个账号。',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        height: 1.7,
-                      ),
+                    const SizedBox(height: 6),
+                    const Text(
+                      '支持按账号、姓名和状态快速过滤用户记录。',
+                      style: TextStyle(
+                          color: AppColors.textSecondary, height: 1.5),
+                    ),
+                    const SizedBox(height: 20),
+                    Wrap(
+                      spacing: 16,
+                      runSpacing: 16,
+                      children: [
+                        SizedBox(
+                          width: compact ? constraints.maxWidth : 280,
+                          child: AppSearchField(
+                            controller: _keywordController,
+                            hintText: '搜索账号、姓名或手机号',
+                            onSubmitted: () => _search(),
+                          ),
+                        ),
+                        SizedBox(
+                          width: compact ? constraints.maxWidth : 220,
+                          child: AppSelectField<int>(
+                            value: listState.status,
+                            labelText: '状态',
+                            items: const [
+                              DropdownMenuItem<int>(
+                                value: null,
+                                child: Text('全部状态'),
+                              ),
+                              DropdownMenuItem(value: 1, child: Text('启用')),
+                              DropdownMenuItem(value: 0, child: Text('禁用')),
+                            ],
+                            onChanged: listController.setStatusFilter,
+                          ),
+                        ),
+                        Wrap(
+                          spacing: 12,
+                          runSpacing: 12,
+                          children: [
+                            ElevatedButton(
+                              onPressed: _search,
+                              child: const Text('查询'),
+                            ),
+                            OutlinedButton(
+                              onPressed: _reset,
+                              child: const Text('重置'),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   ],
                 ),
               ),
-              if (canAdd)
-                ElevatedButton.icon(
-                  onPressed: _openForm,
-                  icon: const Icon(Icons.add_rounded),
-                  label: const Text('新建用户'),
-                ),
-            ],
-          ),
-          const SizedBox(height: 20),
-          Wrap(
-            spacing: 16,
-            runSpacing: 16,
-            children: [
-              SizedBox(
-                width: statWidth,
-                child: _UserStatCard(
-                  title: '账号总数',
-                  value: '$_total',
-                  color: AppColors.brandBlue,
-                ),
-              ),
-              SizedBox(
-                width: statWidth,
-                child: _UserStatCard(
-                  title: '启用',
-                  value: '${_items.where((item) => item.status == 1).length}',
-                  color: AppColors.success,
-                ),
-              ),
-              SizedBox(
-                width: statWidth,
-                child: _UserStatCard(
-                  title: '禁用',
-                  value: '${_items.where((item) => item.status == 0).length}',
-                  color: AppColors.warning,
-                ),
-              ),
-              SizedBox(
-                width: statWidth,
-                child: _UserStatCard(
-                  title: '已绑定员工',
-                  value:
-                      '${_items.where((item) => item.employeeId != null).length}',
-                  color: AppColors.textPrimary,
-                ),
+              const SizedBox(height: 24),
+              AppTableSection(
+                title: '用户列表',
+                subtitle:
+                    listState.loading ? '正在加载用户数据。' : '共 ${listState.total} 个账号，支持编辑、分配角色和删除操作。',
+                footer: listState.loading || listState.errorMessage != null || listState.items.isEmpty
+                    ? null
+                    : AppPaginationBar(
+                        page: listState.query.page,
+                        pageSize: listState.query.pageSize,
+                        total: listState.total,
+                        onPageChanged: _changePage,
+                      ),
+                child: _buildTable(
+                    listState: listState,
+                    canEdit: canEdit,
+                    canDelete: canDelete,
+                    canAssign: canAssign),
               ),
             ],
           ),
-          const SizedBox(height: 18),
-          card(
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  '条件筛选',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textPrimary,
-                  ),
-                ),
-                const SizedBox(height: 14),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 12,
-                  children: [
-                    SizedBox(
-                      width: 240,
-                      child: TextField(
-                        controller: _keywordController,
-                        decoration:
-                            const InputDecoration(labelText: '账号 / 姓名 / 手机号'),
-                      ),
-                    ),
-                    SizedBox(
-                      width: 160,
-                      child: DropdownButtonFormField<int?>(
-                        initialValue: _status,
-                        decoration: const InputDecoration(labelText: '状态'),
-                        items: const [
-                          DropdownMenuItem<int?>(
-                              value: null, child: Text('全部状态')),
-                          DropdownMenuItem<int?>(value: 1, child: Text('启用')),
-                          DropdownMenuItem<int?>(value: 0, child: Text('禁用')),
-                        ],
-                        onChanged: (value) => setState(() => _status = value),
-                      ),
-                    ),
-                    ElevatedButton(onPressed: _search, child: const Text('查询')),
-                    OutlinedButton(onPressed: _reset, child: const Text('重置')),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 18),
-        ];
-
-        if (compact) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                ...content,
-                SizedBox(height: 560, child: tablePanel()),
-              ],
-            ),
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ...content,
-            Expanded(child: tablePanel()),
-          ],
         );
       },
     );
   }
-}
 
-Widget _field(Widget child) => Padding(
-      padding: const EdgeInsets.only(bottom: 14),
-      child: child,
-    );
+  Widget _buildTable({
+    required UserListState listState,
+    required bool canEdit,
+    required bool canDelete,
+    required bool canAssign,
+  }) {
+    if (listState.loading) {
+      return const AppTableLoadingSkeleton(rows: 6, columns: 7);
+    }
 
-String _formatTime(String? value) {
-  if (value == null || value.isEmpty) return '-';
-  return value.replaceFirst('T', ' ').split('.').first;
-}
+    if (listState.errorMessage != null) {
+      return AppErrorState(
+        message: listState.errorMessage!,
+        onRetry: _load,
+      );
+    }
 
-class _UserStatCard extends StatelessWidget {
-  final String title;
-  final String value;
-  final Color color;
+    if (listState.items.isEmpty) {
+      return AppEmptyState(
+        title: '暂无数据',
+        message: '当前没有符合条件的用户记录，试试调整筛选条件。',
+        action: OutlinedButton(
+          onPressed: _reset,
+          child: const Text('清空筛选'),
+        ),
+      );
+    }
+    const operationWidth = 132.0;
 
-  const _UserStatCard({
-    required this.title,
-    required this.value,
-    required this.color,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: AppColors.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              color: color.withValues(alpha: 0.10),
-              borderRadius: BorderRadius.circular(14),
-            ),
-            alignment: Alignment.center,
-            child: Icon(Icons.manage_accounts_rounded, color: color),
-          ),
-          const SizedBox(height: 16),
-          Text(title, style: const TextStyle(color: AppColors.textSecondary)),
-          const SizedBox(height: 8),
-          Text(
-            value,
-            style: const TextStyle(
-              fontSize: 26,
-              fontWeight: FontWeight.w800,
-              color: AppColors.textPrimary,
-            ),
-          ),
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: DataTable(
+        headingRowColor: WidgetStateProperty.all(
+          AppColors.bgGray.withValues(alpha: 0.7),
+        ),
+        columns: const [
+          DataColumn(label: Text('账号')),
+          DataColumn(label: Text('姓名')),
+          DataColumn(label: Text('绑定员工')),
+          DataColumn(label: Text('角色')),
+          DataColumn(label: Text('状态')),
+          DataColumn(label: Text('最后登录')),
+          DataColumn(label: Text('操作')),
         ],
+        rows: listState.items
+            .map(
+              (user) => DataRow(
+                cells: [
+                  DataCell(Text(user.username)),
+                  DataCell(Text(user.realName)),
+                  DataCell(Text(user.employeeName ?? '-')),
+                  DataCell(
+                    SizedBox(
+                      width: 220,
+                      child: Text(
+                        user.roleNames.isEmpty
+                            ? '-'
+                            : user.roleNames.join(' / '),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                  DataCell(
+                    AppStatusPill(
+                      label: user.status == 1 ? '启用' : '禁用',
+                      color: user.status == 1
+                          ? AppColors.success
+                          : AppColors.warning,
+                    ),
+                  ),
+                  DataCell(Text(_formatTime(user.lastLoginAt))),
+                  DataCell(
+                    SizedBox(
+                      width: operationWidth < 44 ? 44 : operationWidth,
+                      child: Row(
+                        children: [
+                          PermissionWidget(
+                            allowed: canEdit,
+                            showDisabledState: true,
+                            deniedTooltip: '当前账号没有此操作权限',
+                            child: AppIconActionButton(
+                              icon: Icons.edit_outlined,
+                              tooltip: '编辑用户',
+                              onPressed: () => _showUserForm(user),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          PermissionWidget(
+                            allowed: canAssign,
+                            showDisabledState: true,
+                            deniedTooltip: '当前账号没有此操作权限',
+                            child: AppIconActionButton(
+                              icon: Icons.manage_accounts_outlined,
+                              tooltip: '分配角色',
+                              onPressed: () => _showAssignRoles(user),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          PermissionWidget(
+                            allowed: canDelete,
+                            showDisabledState: true,
+                            deniedTooltip: '当前账号没有此操作权限',
+                            child: AppIconActionButton(
+                              icon: Icons.delete_outline_rounded,
+                              tooltip: '删除用户',
+                              color: AppColors.danger,
+                              onPressed: () => _deleteUser(user),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            )
+            .toList(),
       ),
     );
   }
-}
 
-class _StatusPill extends StatelessWidget {
-  final bool enabled;
-
-  const _StatusPill({required this.enabled});
-
-  @override
-  Widget build(BuildContext context) {
-    final color = enabled ? AppColors.success : AppColors.warning;
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(999),
-      ),
+  Widget _sectionTitle(String title) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
       child: Text(
-        enabled ? '启用' : '禁用',
-        style: TextStyle(
-          color: color,
-          fontSize: 12,
+        title,
+        style: const TextStyle(
+          fontSize: 18,
           fontWeight: FontWeight.w700,
+          color: AppColors.textPrimary,
         ),
       ),
     );
   }
-}
 
-class _UserEmptyState extends StatelessWidget {
-  const _UserEmptyState();
+  Widget _field(Widget child) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 16),
+      child: child,
+    );
+  }
 
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.manage_accounts_outlined,
-              size: 40, color: AppColors.textHint),
-          SizedBox(height: 14),
-          Text(
-            '没有找到符合条件的用户记录',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w700,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            '你可以调整筛选条件，或新建一个账号。',
-            style: TextStyle(color: AppColors.textSecondary),
-          ),
-        ],
+  Widget _errorBox(String message) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppColors.danger.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        message,
+        style: const TextStyle(
+          color: AppColors.danger,
+          fontWeight: FontWeight.w600,
+        ),
       ),
     );
+  }
+
+  String _formatTime(String? value) {
+    if (value == null || value.isEmpty) return '-';
+    return value.replaceFirst('T', ' ').split('.').first;
   }
 }

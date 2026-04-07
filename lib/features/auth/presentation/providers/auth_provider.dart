@@ -9,8 +9,9 @@ import 'package:my_second_app/features/auth/presentation/states/auth_state.dart'
 import 'package:my_second_app/shared/repositories/auth_repository.dart';
 
 class AuthController extends ChangeNotifier {
-  AuthController._internal()
-      : _tokenStorage = TokenStorage(),
+  AuthController._internal({bool keepAlive = false})
+      : _keepAlive = keepAlive,
+        _tokenStorage = TokenStorage(),
         _userStorage = UserStorage(),
         state = const AuthState.initial() {
     _dio = DioClient(
@@ -23,6 +24,7 @@ class AuthController extends ChangeNotifier {
 
   final TokenStorage _tokenStorage;
   final UserStorage _userStorage;
+  final bool _keepAlive;
   late final Dio _dio;
   late final AuthRepository _repository;
 
@@ -137,9 +139,18 @@ class AuthController extends ChangeNotifier {
   }
 
   bool hasPermission(String code) => state.permissions.contains(code);
+
+  @override
+  void dispose() {
+    if (_keepAlive) {
+      return;
+    }
+    super.dispose();
+  }
 }
 
-final AuthController appAuthController = AuthController._internal();
+final AuthController appAuthController =
+    AuthController._internal(keepAlive: true);
 
 final authControllerProvider = ChangeNotifierProvider<AuthController>(
   (ref) => appAuthController,

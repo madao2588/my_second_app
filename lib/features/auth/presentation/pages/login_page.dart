@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:my_second_app/app/content/app_copy.dart';
 import 'package:my_second_app/app/router/route_names.dart';
 import 'package:my_second_app/app/theme/app_colors.dart';
+import 'package:my_second_app/core/constants/app_breakpoints.dart';
 import 'package:my_second_app/features/auth/presentation/providers/auth_provider.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -38,8 +40,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final wide =
-              constraints.maxWidth >= 1040 && constraints.maxHeight >= 760;
+          final wide = constraints.maxWidth >= AppBreakpoints.compactDesktop &&
+              constraints.maxHeight >= 760;
           final horizontalPadding = constraints.maxWidth < 600 ? 16.0 : 24.0;
           final verticalPadding = constraints.maxHeight < 720 ? 16.0 : 24.0;
 
@@ -154,7 +156,7 @@ class _LoginHero extends StatelessWidget {
               borderRadius: BorderRadius.circular(999),
             ),
             child: const Text(
-              'Enterprise Admin Suite',
+              AppCopy.loginHeroBadge,
               style: TextStyle(
                 color: AppColors.brandBlue,
                 fontWeight: FontWeight.w700,
@@ -163,7 +165,7 @@ class _LoginHero extends StatelessWidget {
           ),
           const SizedBox(height: 24),
           Text(
-            '企业基础信息管理平台',
+            AppCopy.loginHeroTitle,
             style: TextStyle(
               fontSize: compact ? 32 : 50,
               height: 1.12,
@@ -173,7 +175,7 @@ class _LoginHero extends StatelessWidget {
           ),
           const SizedBox(height: 16),
           const Text(
-            '围绕员工、部门、岗位与账号权限构建统一后台，先打通组织管理与权限基础，再逐步扩展导出、图表和更多业务能力。',
+            AppCopy.loginHeroDescription,
             style: TextStyle(
               fontSize: 16,
               height: 1.8,
@@ -185,10 +187,10 @@ class _LoginHero extends StatelessWidget {
             spacing: 12,
             runSpacing: 12,
             children: const [
-              _FeatureChip(label: '跨平台 Web / Windows'),
-              _FeatureChip(label: 'JWT 登录与权限控制'),
-              _FeatureChip(label: '员工基础 CRUD'),
-              _FeatureChip(label: '支持统计图表与导出'),
+              _FeatureChip(label: AppCopy.loginFeatureWebDesktop),
+              _FeatureChip(label: AppCopy.loginFeatureAuth),
+              _FeatureChip(label: AppCopy.loginFeatureCrud),
+              _FeatureChip(label: AppCopy.loginFeatureAnalytics),
             ],
           ),
           const SizedBox(height: 28),
@@ -205,15 +207,24 @@ class _LoginHero extends StatelessWidget {
               children: const [
                 SizedBox(
                   width: 180,
-                  child: _MetricBadge(label: '当前阶段', value: '可运行预览'),
+                  child: _MetricBadge(
+                    label: AppCopy.loginMetricStageLabel,
+                    value: AppCopy.loginMetricStageValue,
+                  ),
                 ),
                 SizedBox(
                   width: 180,
-                  child: _MetricBadge(label: '默认后端', value: 'FastAPI + SQLite'),
+                  child: _MetricBadge(
+                    label: AppCopy.loginMetricBackendLabel,
+                    value: AppCopy.loginMetricBackendValue,
+                  ),
                 ),
                 SizedBox(
                   width: 180,
-                  child: _MetricBadge(label: '默认账号', value: 'admin'),
+                  child: _MetricBadge(
+                    label: AppCopy.loginMetricAccountLabel,
+                    value: AppCopy.loginMetricAccountValue,
+                  ),
                 ),
               ],
             ),
@@ -264,7 +275,7 @@ class _LoginCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             const Text(
-              '欢迎回来',
+              AppCopy.loginWelcomeTitle,
               style: TextStyle(
                 fontSize: 30,
                 fontWeight: FontWeight.w800,
@@ -273,7 +284,7 @@ class _LoginCard extends StatelessWidget {
             ),
             const SizedBox(height: 8),
             const Text(
-              '输入账号和密码，进入企业管理后台。',
+              AppCopy.loginWelcomeSubtitle,
               style: TextStyle(
                 fontSize: 14,
                 color: AppColors.textSecondary,
@@ -283,12 +294,12 @@ class _LoginCard extends StatelessWidget {
             TextFormField(
               controller: usernameController,
               decoration: const InputDecoration(
-                labelText: '账号',
+                labelText: AppCopy.loginUsernameLabel,
                 prefixIcon: Icon(Icons.person_outline_rounded),
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return '请输入账号';
+                  return AppCopy.loginUsernameRequired;
                 }
                 return null;
               },
@@ -298,12 +309,12 @@ class _LoginCard extends StatelessWidget {
               controller: passwordController,
               obscureText: true,
               decoration: const InputDecoration(
-                labelText: '密码',
+                labelText: AppCopy.loginPasswordLabel,
                 prefixIcon: Icon(Icons.lock_outline_rounded),
               ),
               validator: (value) {
                 if (value == null || value.trim().isEmpty) {
-                  return '请输入密码';
+                  return AppCopy.loginPasswordRequired;
                 }
                 return null;
               },
@@ -321,7 +332,7 @@ class _LoginCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    '预览账号',
+                    AppCopy.loginPreviewTitle,
                     style: TextStyle(
                       color: AppColors.textPrimary,
                       fontWeight: FontWeight.w700,
@@ -329,7 +340,7 @@ class _LoginCard extends StatelessWidget {
                   ),
                   SizedBox(height: 8),
                   Text(
-                    '用户名：admin\n密码：123456',
+                    AppCopy.loginPreviewContent,
                     style: TextStyle(
                       color: AppColors.textSecondary,
                       height: 1.7,
@@ -371,7 +382,7 @@ class _LoginCard extends StatelessWidget {
                           color: Colors.white,
                         ),
                       )
-                    : const Text('登录系统'),
+                    : const Text(AppCopy.loginSubmit),
               ),
             ),
           ],

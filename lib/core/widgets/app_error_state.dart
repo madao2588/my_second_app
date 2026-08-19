@@ -1,16 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:my_second_app/app/theme/app_colors.dart';
 
-class AppEmptyState extends StatelessWidget {
-  final String title;
+class AppErrorState extends StatelessWidget {
   final String message;
-  final Widget? action;
+  final VoidCallback? onRetry;
+  final String title;
+  final String retryLabel;
 
-  const AppEmptyState({
+  const AppErrorState({
     super.key,
-    required this.title,
     required this.message,
-    this.action,
+    this.onRetry,
+    this.title = '加载失败',
+    this.retryLabel = '重新加载',
   });
 
   @override
@@ -25,13 +27,13 @@ class AppEmptyState extends StatelessWidget {
               width: 68,
               height: 68,
               decoration: BoxDecoration(
-                color: AppColors.brandBlue.withValues(alpha: 0.08),
+                color: AppColors.danger.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(24),
               ),
               child: const Icon(
-                Icons.inbox_outlined,
+                Icons.error_outline_rounded,
                 size: 32,
-                color: AppColors.brandBlue,
+                color: AppColors.danger,
               ),
             ),
             const SizedBox(height: 18),
@@ -52,9 +54,12 @@ class AppEmptyState extends StatelessWidget {
                 height: 1.5,
               ),
             ),
-            if (action != null) ...[
+            if (onRetry != null) ...[
               const SizedBox(height: 18),
-              action!,
+              ElevatedButton(
+                onPressed: onRetry,
+                child: Text(retryLabel),
+              ),
             ],
           ],
         ),

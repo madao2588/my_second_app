@@ -22,7 +22,8 @@ class AppHeader extends StatelessWidget {
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
     return Container(
-      padding: EdgeInsets.fromLTRB(compact ? 16 : 28, 16, compact ? 16 : 28, 16),
+      padding:
+          EdgeInsets.fromLTRB(compact ? 16 : 28, 16, compact ? 16 : 28, 16),
       decoration: const BoxDecoration(
         color: Colors.white,
         border: Border(bottom: BorderSide(color: AppColors.line)),
@@ -96,7 +97,8 @@ class AppHeader extends StatelessWidget {
                       ),
                       const SizedBox(width: 12),
                       ConstrainedBox(
-                        constraints: BoxConstraints(maxWidth: compact ? 130 : 200),
+                        constraints:
+                            BoxConstraints(maxWidth: compact ? 130 : 200),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisAlignment: MainAxisAlignment.center,

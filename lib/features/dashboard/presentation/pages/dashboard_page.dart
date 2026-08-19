@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:my_second_app/app/theme/app_colors.dart';
+import 'package:my_second_app/core/constants/app_breakpoints.dart';
+import 'package:my_second_app/core/widgets/app_error_state.dart';
+import 'package:my_second_app/core/widgets/app_loading_skeleton.dart';
 import 'package:my_second_app/features/auth/presentation/providers/auth_provider.dart';
+import 'package:my_second_app/features/dashboard/data/models/chart_item_model.dart';
 import 'package:my_second_app/features/dashboard/presentation/providers/dashboard_provider.dart';
 import 'package:my_second_app/features/dashboard/presentation/widgets/department_bar_chart.dart';
 import 'package:my_second_app/features/dashboard/presentation/widgets/kpi_card.dart';
@@ -32,129 +36,94 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compactHeight = constraints.maxHeight < 820;
-        final compactWidth = constraints.maxWidth < 1180;
-        final compact = compactHeight || compactWidth;
+        final compactWidth =
+            constraints.maxWidth < AppBreakpoints.compactDesktop;
+        final stackHero = constraints.maxWidth < 1260;
+        final stackCharts = constraints.maxWidth < 1120;
+        final contentMaxWidth = compactWidth
+            ? constraints.maxWidth
+            : AppBreakpoints.contentMaxWidth;
 
-        final hero = _heroSection(
-          userName: user?.realName ?? '管理员',
-          joinDays: summary?.userJoinDays ?? 0,
-          monthHires: summary?.monthHires ?? 0,
-          monthLeaves: summary?.monthLeaves ?? 0,
-          compactWidth: compactWidth,
-        );
-
-        final metrics = _metricSection(summary);
-
-        final charts = compactWidth
-            ? Column(
+        return Align(
+          alignment: Alignment.topLeft,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: contentMaxWidth),
+            child: SingleChildScrollView(
+              padding: EdgeInsets.only(bottom: compactHeight ? 16 : 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    height: 360,
-                    child: _PanelCard(
-                      title: '各部门人数分布',
-                      subtitle: '按有效员工统计部门人员规模',
-                      child: DepartmentBarChart(items: state.departmentDistribution),
-                    ),
+                  _heroSection(
+                    userName: user?.realName ?? '系统管理员',
+                    joinDays: summary?.userJoinDays ?? 0,
+                    monthHires: summary?.monthHires ?? 0,
+                    monthLeaves: summary?.monthLeaves ?? 0,
+                    compactWidth: stackHero,
                   ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    height: 360,
-                    child: _PanelCard(
-                      title: '岗位占比',
-                      subtitle: '当前岗位结构分布',
-                      child: PositionDonutChart(items: state.positionDistribution),
+                  const SizedBox(height: 24),
+                  if (state.loading && summary == null) ...[
+                    _metricSection(summary, loading: true),
+                    const SizedBox(height: 16),
+                    _chartSection(
+                      stackCharts: stackCharts,
+                      departmentDistribution: const [],
+                      positionDistribution: const [],
+                      loading: true,
                     ),
-                  ),
-                ],
-              )
-            : Expanded(
-                child: Row(
-                  children: [
-                    Expanded(
-                      flex: 3,
-                      child: _PanelCard(
-                        title: '各部门人数分布',
-                        subtitle: '按有效员工统计部门人员规模',
-                        child: DepartmentBarChart(items: state.departmentDistribution),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      height: stackCharts ? 320 : 360,
+                      child: const _PanelCard(
+                        title: '最新入职员工',
+                        subtitle: '最近 5 条入职记录',
+                        child: AppPanelLoadingSkeleton(height: 220),
                       ),
                     ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      flex: 2,
+                  ] else if (state.errorMessage != null && summary == null) ...[
+                    AppErrorState(
+                      message: state.errorMessage!,
+                      onRetry: controller.load,
+                    ),
+                  ] else ...[
+                    if (state.errorMessage != null) ...[
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: AppColors.danger.withValues(alpha: 0.08),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Text(
+                          state.errorMessage!,
+                          style: const TextStyle(
+                            color: AppColors.danger,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                    ],
+                    _metricSection(summary),
+                    const SizedBox(height: 16),
+                    _chartSection(
+                      stackCharts: stackCharts,
+                      departmentDistribution: state.departmentDistribution,
+                      positionDistribution: state.positionDistribution,
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      height: stackCharts ? 320 : 360,
                       child: _PanelCard(
-                        title: '岗位占比',
-                        subtitle: '当前岗位结构分布',
-                        child: PositionDonutChart(items: state.positionDistribution),
+                        title: '最新入职员工',
+                        subtitle: '最近 5 条入职记录',
+                        child: LatestHiresCard(items: state.latestHires),
                       ),
                     ),
                   ],
-                ),
-              );
-
-        final latestHires = SizedBox(
-          height: compact ? 320 : double.infinity,
-          child: _PanelCard(
-            title: '最新入职员工',
-            subtitle: '最近 5 条入职记录',
-            child: LatestHiresCard(items: state.latestHires),
+                ],
+              ),
+            ),
           ),
-        );
-
-        final contentChildren = <Widget>[
-          hero,
-          const SizedBox(height: 24),
-          if (state.errorMessage != null) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: AppColors.danger.withValues(alpha: 0.08),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: Text(
-                state.errorMessage!,
-                style: const TextStyle(
-                  color: AppColors.danger,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-          if (state.loading && summary == null)
-            const SizedBox(
-              height: 320,
-              child: Center(child: CircularProgressIndicator()),
-            )
-          else ...[
-            metrics,
-            const SizedBox(height: 16),
-            if (compactWidth) ...[
-              charts,
-              const SizedBox(height: 16),
-              latestHires,
-            ],
-          ],
-        ];
-
-        if (compact) {
-          return SingleChildScrollView(
-            padding: const EdgeInsets.only(bottom: 12),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: contentChildren,
-            ),
-          );
-        }
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ...contentChildren.take(contentChildren.length - 2),
-            charts,
-            const SizedBox(height: 16),
-            Expanded(child: latestHires),
-          ],
         );
       },
     );
@@ -237,6 +206,7 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
               ],
             )
           : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
                   child: _HeroText(userName: userName, joinDays: joinDays),
@@ -248,7 +218,43 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
     );
   }
 
-  Widget _metricSection(summary) {
+  Widget _metricSection(dynamic summary, {bool loading = false}) {
+    if (loading) {
+      return LayoutBuilder(
+        builder: (context, constraints) {
+          final compact = constraints.maxWidth < 1120;
+          final itemWidth = constraints.maxWidth < 720
+              ? constraints.maxWidth
+              : (constraints.maxWidth - 16) / 2;
+          final items = List.generate(
+            4,
+            (_) => SizedBox(
+              width: compact ? itemWidth : null,
+              height: 208,
+              child: const _MetricSkeletonCard(),
+            ),
+          );
+
+          if (compact) {
+            return Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: items,
+            );
+          }
+
+          return Row(
+            children: [
+              for (var i = 0; i < items.length; i++) ...[
+                Expanded(child: items[i]),
+                if (i != items.length - 1) const SizedBox(width: 16),
+              ],
+            ],
+          );
+        },
+      );
+    }
+
     final cards = [
       KpiCard(
         title: '总员工数',
@@ -311,6 +317,70 @@ class _DashboardPageState extends ConsumerState<DashboardPage> {
           ],
         );
       },
+    );
+  }
+
+  Widget _chartSection({
+    required bool stackCharts,
+    required List<ChartItemModel> departmentDistribution,
+    required List<ChartItemModel> positionDistribution,
+    bool loading = false,
+  }) {
+    Widget departmentChild = loading
+        ? const AppPanelLoadingSkeleton()
+        : DepartmentBarChart(items: departmentDistribution);
+    Widget positionChild = loading
+        ? const AppPanelLoadingSkeleton()
+        : PositionDonutChart(items: positionDistribution);
+
+    if (stackCharts) {
+      return Column(
+        children: [
+          SizedBox(
+            height: 360,
+            child: _PanelCard(
+              title: '各部门人数分布',
+              subtitle: '按有效员工统计部门人员规模',
+              child: departmentChild,
+            ),
+          ),
+          const SizedBox(height: 16),
+          SizedBox(
+            height: 360,
+            child: _PanelCard(
+              title: '岗位占比',
+              subtitle: '当前岗位结构分布',
+              child: positionChild,
+            ),
+          ),
+        ],
+      );
+    }
+
+    return SizedBox(
+      height: 420,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(
+            flex: 3,
+            child: _PanelCard(
+              title: '各部门人数分布',
+              subtitle: '按有效员工统计部门人员规模',
+              child: departmentChild,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            flex: 2,
+            child: _PanelCard(
+              title: '岗位占比',
+              subtitle: '当前岗位结构分布',
+              child: positionChild,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -392,6 +462,61 @@ class _PanelCard extends StatelessWidget {
           ),
           const SizedBox(height: 18),
           Expanded(child: child),
+        ],
+      ),
+    );
+  }
+}
+
+class _MetricSkeletonCard extends StatelessWidget {
+  const _MetricSkeletonCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.line),
+      ),
+      child: const Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 44,
+            height: 44,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Color(0x142563EB),
+                borderRadius: BorderRadius.all(Radius.circular(14)),
+              ),
+            ),
+          ),
+          Spacer(),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: Color(0x142563EB),
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+            ),
+            child: SizedBox(width: 78, height: 14),
+          ),
+          SizedBox(height: 10),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: Color(0x142563EB),
+              borderRadius: BorderRadius.all(Radius.circular(14)),
+            ),
+            child: SizedBox(width: 96, height: 28),
+          ),
+          SizedBox(height: 10),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              color: Color(0x142563EB),
+              borderRadius: BorderRadius.all(Radius.circular(12)),
+            ),
+            child: SizedBox(width: 170, height: 12),
+          ),
         ],
       ),
     );

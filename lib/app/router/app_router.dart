@@ -1,7 +1,9 @@
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_second_app/app/layout/shell/app_shell.dart';
+import 'package:my_second_app/app/navigation/app_navigation.dart';
 import 'package:my_second_app/features/auth/presentation/pages/login_page.dart';
+import 'package:my_second_app/features/auth/presentation/pages/no_permission_page.dart';
 import 'package:my_second_app/features/auth/presentation/providers/auth_provider.dart';
 import 'package:my_second_app/features/dashboard/presentation/pages/dashboard_page.dart';
 import 'package:my_second_app/features/department/presentation/pages/department_list_page.dart';
@@ -20,7 +22,9 @@ final GoRouter appRouter = GoRouter(
   refreshListenable: appAuthController,
   redirect: (context, state) {
     final isLoginPage = state.matchedLocation == RouteNames.login;
+    final isNoPermissionPage = state.matchedLocation == RouteNames.noPermission;
     final isAuthenticated = appAuthController.state.isAuthenticated;
+    final permissions = appAuthController.state.permissions;
 
     if (!appAuthController.state.initialized) {
       return isLoginPage ? null : RouteNames.login;
@@ -29,7 +33,16 @@ final GoRouter appRouter = GoRouter(
       return RouteNames.login;
     }
     if (isAuthenticated && isLoginPage) {
-      return RouteNames.dashboard;
+      return AppNavigation.firstAccessibleRoute(permissions);
+    }
+    if (isAuthenticated && isNoPermissionPage) {
+      return null;
+    }
+    if (isAuthenticated &&
+        !isLoginPage &&
+        !isNoPermissionPage &&
+        !AppNavigation.canAccessRoute(state.matchedLocation, permissions)) {
+      return RouteNames.noPermission;
     }
     return null;
   },
@@ -37,6 +50,10 @@ final GoRouter appRouter = GoRouter(
     GoRoute(
       path: RouteNames.login,
       builder: (context, state) => const LoginPage(),
+    ),
+    GoRoute(
+      path: RouteNames.noPermission,
+      builder: (context, state) => const NoPermissionPage(),
     ),
     ShellRoute(
       builder: (context, state, child) => AppShell(child: child),

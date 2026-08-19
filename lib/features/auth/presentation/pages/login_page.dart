@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:my_second_app/app/router/route_names.dart';
 import 'package:my_second_app/app/theme/app_colors.dart';
+import 'package:my_second_app/core/constants/app_breakpoints.dart';
 import 'package:my_second_app/features/auth/presentation/providers/auth_provider.dart';
 
 class LoginPage extends ConsumerStatefulWidget {
@@ -38,8 +39,8 @@ class _LoginPageState extends ConsumerState<LoginPage> {
     return Scaffold(
       body: LayoutBuilder(
         builder: (context, constraints) {
-          final wide =
-              constraints.maxWidth >= 1040 && constraints.maxHeight >= 760;
+          final wide = constraints.maxWidth >= AppBreakpoints.compactDesktop &&
+              constraints.maxHeight >= 760;
           final horizontalPadding = constraints.maxWidth < 600 ? 16.0 : 24.0;
           final verticalPadding = constraints.maxHeight < 720 ? 16.0 : 24.0;
 
